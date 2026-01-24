@@ -13,40 +13,43 @@
             overflow: hidden;
         }
 
-        #vr-button {
+        #start-overlay {
             position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
             z-index: 9999;
-            padding: 20px 40px;
-            font-size: 24px;
-            font-weight: bold;
-            background: #e74c3c;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-
-        #vr-button:active {
-            background: #c0392b;
-        }
-
-        #info {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            z-index: 9998;
-            padding: 15px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            border-radius: 10px;
             font-family: Arial, sans-serif;
-            font-size: 14px;
             text-align: center;
+            cursor: pointer;
+        }
+
+        #start-overlay h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        #start-overlay p {
+            font-size: 20px;
+            margin: 10px 20px;
+        }
+
+        #start-overlay .tap-icon {
+            font-size: 80px;
+            margin: 30px 0;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
         }
 
         .hidden {
@@ -55,19 +58,19 @@
     </style>
 </head>
 <body>
-    <div id="info">
-        Drehe dein Handy ins <b>Querformat</b>, dann drücke den Button unten.
+    <div id="start-overlay">
+        <h1>VR Welt</h1>
+        <div class="tap-icon">👆</div>
+        <p><b>Tippe irgendwo</b> um zu starten</p>
+        <p>Dann Handy in VR-Brille stecken</p>
     </div>
 
-    <button id="vr-button">🥽 VR STARTEN</button>
-
     <a-scene
-        vr-mode-ui="enabled: true; enterVRButton: #vr-button"
-        device-orientation-permission-ui="enabled: true"
-        renderer="antialias: true"
-        embedded>
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false"
+        renderer="antialias: true">
 
-        <!-- Himmel mit Gradient -->
+        <!-- Himmel -->
         <a-sky color="#87CEEB"></a-sky>
 
         <!-- Boden -->
@@ -76,8 +79,7 @@
             rotation="-90 0 0"
             width="100"
             height="100"
-            color="#567d46"
-            shadow="receive: true">
+            color="#567d46">
         </a-plane>
 
         <!-- Sonne -->
@@ -92,16 +94,14 @@
         <a-box
             position="-2 1 -5"
             rotation="0 45 0"
-            color="#EF2D5E"
-            shadow="cast: true">
+            color="#EF2D5E">
         </a-box>
 
         <!-- Blaue Kugel -->
         <a-sphere
             position="0 1.5 -6"
             radius="1"
-            color="#3498db"
-            shadow="cast: true">
+            color="#3498db">
         </a-sphere>
 
         <!-- Grüner Zylinder -->
@@ -109,8 +109,7 @@
             position="2 1 -5"
             radius="0.5"
             height="2"
-            color="#2ecc71"
-            shadow="cast: true">
+            color="#2ecc71">
         </a-cylinder>
 
         <!-- Gelber Kegel -->
@@ -119,18 +118,16 @@
             radius-bottom="1"
             radius-top="0"
             height="2"
-            color="#f1c40f"
-            shadow="cast: true">
+            color="#f1c40f">
         </a-cone>
 
-        <!-- Violetter Torus (Ring) -->
+        <!-- Violetter Torus -->
         <a-torus
             position="3 2 -8"
             radius="1"
             radius-tubular="0.2"
             color="#9b59b6"
-            rotation="45 45 0"
-            shadow="cast: true">
+            rotation="45 45 0">
         </a-torus>
 
         <!-- Bäume -->
@@ -165,8 +162,8 @@
         </a-dodecahedron>
 
         <!-- Beleuchtung -->
-        <a-light type="ambient" color="#ffffff" intensity="0.5"></a-light>
-        <a-light type="directional" position="5 10 5" intensity="0.8" castShadow="true"></a-light>
+        <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
+        <a-light type="directional" position="5 10 5" intensity="0.8"></a-light>
 
         <!-- Kamera -->
         <a-entity position="0 1.6 0">
@@ -176,46 +173,41 @@
     </a-scene>
 
     <script>
-        const vrButton = document.getElementById('vr-button');
-        const info = document.getElementById('info');
+        const overlay = document.getElementById('start-overlay');
         const scene = document.querySelector('a-scene');
 
-        // Warte bis A-Frame geladen ist
-        scene.addEventListener('loaded', function() {
-            console.log('Scene loaded');
-        });
-
-        vrButton.addEventListener('click', async function() {
-            // iOS benötigt Berechtigung für Bewegungssensoren
+        async function startVR() {
+            // iOS Berechtigung für Sensoren
             if (typeof DeviceMotionEvent !== 'undefined' &&
                 typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
-                    const permission = await DeviceMotionEvent.requestPermission();
-                    if (permission !== 'granted') {
-                        alert('Bitte erlaube den Zugriff auf Bewegungssensoren für VR!');
-                        return;
-                    }
+                    await DeviceMotionEvent.requestPermission();
                 } catch (e) {
-                    console.error(e);
+                    console.log('Sensor permission error:', e);
                 }
             }
 
-            // Verstecke UI
-            vrButton.classList.add('hidden');
-            info.classList.add('hidden');
-
-            // Versuche in den VR-Modus zu wechseln
-            if (scene.is('vr-mode')) {
-                scene.exitVR();
-            } else {
-                scene.enterVR();
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    await DeviceOrientationEvent.requestPermission();
+                } catch (e) {
+                    console.log('Orientation permission error:', e);
+                }
             }
-        });
 
-        // Zeige Button wieder wenn VR-Modus verlassen wird
-        scene.addEventListener('exit-vr', function() {
-            vrButton.classList.remove('hidden');
-            info.classList.remove('hidden');
+            // Overlay verstecken
+            overlay.classList.add('hidden');
+
+            // VR-Modus starten
+            scene.enterVR();
+        }
+
+        // Bei Klick/Touch starten
+        overlay.addEventListener('click', startVR);
+        overlay.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            startVR();
         });
     </script>
 </body>
