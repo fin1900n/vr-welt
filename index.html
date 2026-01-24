@@ -1,16 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <meta charset="utf-8">
-    <title>VR Welt</title>
-    <meta name="description" content="VR Welt für Smartphone">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <title>CELLIOS VR</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        body {
             overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
         }
 
         #start-overlay {
@@ -19,26 +26,27 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.95);
             z-index: 9999;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            font-family: Arial, sans-serif;
             text-align: center;
             cursor: pointer;
         }
 
         #start-overlay h1 {
-            font-size: 28px;
-            margin-bottom: 20px;
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #4ade80;
         }
 
         #start-overlay p {
-            font-size: 20px;
+            font-size: 18px;
             margin: 10px 20px;
+            color: #ccc;
         }
 
         #start-overlay .tap-icon {
@@ -59,131 +67,454 @@
 </head>
 <body>
     <div id="start-overlay">
-        <h1>VR Welt</h1>
+        <h1>CELLIOS VR</h1>
         <div class="tap-icon">👆</div>
         <p><b>Tippe irgendwo</b> um zu starten</p>
         <p>Dann Handy in VR-Brille stecken</p>
     </div>
 
-    <a-scene
-        vr-mode-ui="enabled: false"
-        device-orientation-permission-ui="enabled: false"
-        renderer="antialias: true">
+    <div id="canvas-container"></div>
 
-        <!-- Himmel -->
-        <a-sky color="#87CEEB"></a-sky>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
 
-        <!-- Boden -->
-        <a-plane
-            position="0 0 0"
-            rotation="-90 0 0"
-            width="100"
-            height="100"
-            color="#567d46">
-        </a-plane>
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-        <!-- Sonne -->
-        <a-sphere
-            position="20 30 -30"
-            radius="5"
-            color="#FFD700"
-            material="emissive: #FFD700; emissiveIntensity: 0.5">
-        </a-sphere>
+        let scene, camera, renderer;
+        let vrMode = false;
+        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        let initialOrientation = null;
 
-        <!-- Rote Box -->
-        <a-box
-            position="-2 1 -5"
-            rotation="0 45 0"
-            color="#EF2D5E">
-        </a-box>
-
-        <!-- Blaue Kugel -->
-        <a-sphere
-            position="0 1.5 -6"
-            radius="1"
-            color="#3498db">
-        </a-sphere>
-
-        <!-- Grüner Zylinder -->
-        <a-cylinder
-            position="2 1 -5"
-            radius="0.5"
-            height="2"
-            color="#2ecc71">
-        </a-cylinder>
-
-        <!-- Gelber Kegel -->
-        <a-cone
-            position="-3 1 -8"
-            radius-bottom="1"
-            radius-top="0"
-            height="2"
-            color="#f1c40f">
-        </a-cone>
-
-        <!-- Violetter Torus -->
-        <a-torus
-            position="3 2 -8"
-            radius="1"
-            radius-tubular="0.2"
-            color="#9b59b6"
-            rotation="45 45 0">
-        </a-torus>
-
-        <!-- Bäume -->
-        <a-cylinder position="-8 1.5 -10" radius="0.3" height="3" color="#8B4513"></a-cylinder>
-        <a-cone position="-8 4 -10" radius-bottom="2" height="4" color="#228B22"></a-cone>
-
-        <a-cylinder position="8 1.5 -12" radius="0.3" height="3" color="#8B4513"></a-cylinder>
-        <a-cone position="8 4 -12" radius-bottom="2" height="4" color="#228B22"></a-cone>
-
-        <a-cylinder position="5 1.5 -15" radius="0.3" height="3" color="#8B4513"></a-cylinder>
-        <a-cone position="5 4 -15" radius-bottom="2" height="4" color="#228B22"></a-cone>
-
-        <a-cylinder position="-6 1.5 -18" radius="0.3" height="3" color="#8B4513"></a-cylinder>
-        <a-cone position="-6 4 -18" radius-bottom="2" height="4" color="#228B22"></a-cone>
-
-        <!-- Wolken -->
-        <a-sphere position="-10 15 -25" radius="3" color="#ffffff" opacity="0.8"></a-sphere>
-        <a-sphere position="-7 15 -25" radius="2.5" color="#ffffff" opacity="0.8"></a-sphere>
-        <a-sphere position="-13 15 -25" radius="2" color="#ffffff" opacity="0.8"></a-sphere>
-
-        <a-sphere position="12 18 -30" radius="3.5" color="#ffffff" opacity="0.8"></a-sphere>
-        <a-sphere position="15 18 -30" radius="2.5" color="#ffffff" opacity="0.8"></a-sphere>
-        <a-sphere position="9 17 -30" radius="2" color="#ffffff" opacity="0.8"></a-sphere>
-
-        <!-- Schwebendes Objekt mit Animation -->
-        <a-dodecahedron
-            position="0 3 -10"
-            radius="0.8"
-            color="#e74c3c"
-            animation="property: rotation; to: 360 360 0; loop: true; dur: 5000; easing: linear"
-            animation__float="property: position; to: 0 4 -10; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine">
-        </a-dodecahedron>
-
-        <!-- Beleuchtung -->
-        <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
-        <a-light type="directional" position="5 10 5" intensity="0.8"></a-light>
-
-        <!-- Kamera -->
-        <a-entity position="0 1.6 0">
-            <a-camera look-controls="magicWindowTrackingEnabled: true; touchEnabled: false">
-            </a-camera>
-        </a-entity>
-    </a-scene>
-
-    <script>
         const overlay = document.getElementById('start-overlay');
-        const scene = document.querySelector('a-scene');
 
+        // Scene setup
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+
+        // Camera - Position in der Mitte der Zelle
+        camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 1.6, 0); // Augenhöhe
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.xr.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 15, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        const pointLight1 = new THREE.PointLight(0x4ade80, 0.5, 15);
+        pointLight1.position.set(0, 4, 0);
+        scene.add(pointLight1);
+
+        // Materials
+        const frameMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a,
+            metalness: 0.8,
+            roughness: 0.3
+        });
+
+        const glassMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x88ccff,
+            metalness: 0,
+            roughness: 0,
+            transmission: 0.9,
+            transparent: true,
+            opacity: 0.3
+        });
+
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a1a2e,
+            metalness: 0.6,
+            roughness: 0.4
+        });
+
+        const orangeRobotMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff6b35,
+            metalness: 0.7,
+            roughness: 0.3
+        });
+
+        const whiteRobotMaterial = new THREE.MeshStandardMaterial({
+            color: 0xf0f0f0,
+            metalness: 0.6,
+            roughness: 0.4
+        });
+
+        const ledMaterial = new THREE.MeshStandardMaterial({
+            color: 0x4ade80,
+            emissive: 0x4ade80,
+            emissiveIntensity: 2
+        });
+
+        const equipmentMaterial = new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            metalness: 0.5,
+            roughness: 0.5
+        });
+
+        // Cell dimensions
+        const cellWidth = 6;
+        const cellDepth = 5;
+        const cellHeight = 3.5;
+        const frameThickness = 0.08;
+
+        // Group for the entire cell
+        const cellGroup = new THREE.Group();
+
+        // === BASE ===
+        const baseGeometry = new THREE.BoxGeometry(cellWidth, 0.4, cellDepth);
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 0.2;
+        base.receiveShadow = true;
+        cellGroup.add(base);
+
+        // Base front panel
+        const frontPanelGeometry = new THREE.BoxGeometry(cellWidth, 0.8, 0.05);
+        const frontPanel = new THREE.Mesh(frontPanelGeometry, baseMaterial);
+        frontPanel.position.set(0, 0.6, cellDepth / 2);
+        cellGroup.add(frontPanel);
+
+        // === FRAME POSTS ===
+        function createFramePost(x, z) {
+            const postGeometry = new THREE.BoxGeometry(frameThickness, cellHeight, frameThickness);
+            const post = new THREE.Mesh(postGeometry, frameMaterial);
+            post.position.set(x, cellHeight / 2 + 0.4, z);
+            post.castShadow = true;
+            return post;
+        }
+
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2));
+        cellGroup.add(createFramePost(-cellWidth/6, -cellDepth/2 + frameThickness/2));
+        cellGroup.add(createFramePost(cellWidth/6, -cellDepth/2 + frameThickness/2));
+        cellGroup.add(createFramePost(-cellWidth/6, cellDepth/2 - frameThickness/2));
+        cellGroup.add(createFramePost(cellWidth/6, cellDepth/2 - frameThickness/2));
+
+        // === FRAME HORIZONTALS ===
+        function createHorizontalFrame(x, y, z, width, depth) {
+            const frameGeometry = new THREE.BoxGeometry(width, frameThickness, depth);
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame.position.set(x, y, z);
+            frame.castShadow = true;
+            return frame;
+        }
+
+        const topY = cellHeight + 0.4;
+        cellGroup.add(createHorizontalFrame(0, topY, -cellDepth/2 + frameThickness/2, cellWidth, frameThickness));
+        cellGroup.add(createHorizontalFrame(0, topY, cellDepth/2 - frameThickness/2, cellWidth, frameThickness));
+        cellGroup.add(createHorizontalFrame(-cellWidth/2 + frameThickness/2, topY, 0, frameThickness, cellDepth));
+        cellGroup.add(createHorizontalFrame(cellWidth/2 - frameThickness/2, topY, 0, frameThickness, cellDepth));
+        cellGroup.add(createHorizontalFrame(0, topY, 0, cellWidth, frameThickness));
+
+        // === GLASS PANELS ===
+        function createGlassPanel(x, y, z, width, height, rotationY) {
+            const glassGeometry = new THREE.PlaneGeometry(width, height);
+            const glass = new THREE.Mesh(glassGeometry, glassMaterial);
+            glass.position.set(x, y, z);
+            glass.rotation.y = rotationY;
+            return glass;
+        }
+
+        const glassHeight = cellHeight - 0.8;
+        const glassY = glassHeight / 2 + 1.0;
+
+        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0));
+        cellGroup.add(createGlassPanel(cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0));
+        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, -cellDepth/2 + 0.02, cellWidth/3 - 0.1, glassHeight, 0));
+        cellGroup.add(createGlassPanel(cellWidth/3, glassY, -cellDepth/2 + 0.02, cellWidth/3 - 0.1, glassHeight, 0));
+        cellGroup.add(createGlassPanel(-cellWidth/2 + 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2));
+        cellGroup.add(createGlassPanel(cellWidth/2 - 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2));
+
+        // === LED STRIPS ===
+        function createLedStrip(x, y, z, length, rotationY) {
+            const ledGeometry = new THREE.BoxGeometry(length, 0.03, 0.05);
+            const led = new THREE.Mesh(ledGeometry, ledMaterial);
+            led.position.set(x, y, z);
+            led.rotation.y = rotationY;
+            return led;
+        }
+
+        const ledY = topY + 0.02;
+        cellGroup.add(createLedStrip(0, ledY, -cellDepth/2 + 0.1, cellWidth - 0.2, 0));
+        cellGroup.add(createLedStrip(0, ledY, cellDepth/2 - 0.1, cellWidth - 0.2, 0));
+        cellGroup.add(createLedStrip(-cellWidth/2 + 0.1, ledY, 0, cellDepth - 0.2, Math.PI / 2));
+        cellGroup.add(createLedStrip(cellWidth/2 - 0.1, ledY, 0, cellDepth - 0.2, Math.PI / 2));
+
+        // === ROBOTS ===
+        function createRobotArm(material, x, z) {
+            const robotGroup = new THREE.Group();
+
+            const baseGeom = new THREE.CylinderGeometry(0.25, 0.3, 0.2, 16);
+            const robotBase = new THREE.Mesh(baseGeom, material);
+            robotBase.position.y = 0.1;
+            robotGroup.add(robotBase);
+
+            const joint1Geom = new THREE.CylinderGeometry(0.15, 0.2, 0.3, 16);
+            const joint1 = new THREE.Mesh(joint1Geom, material);
+            joint1.position.y = 0.35;
+            robotGroup.add(joint1);
+
+            const arm1Geom = new THREE.BoxGeometry(0.15, 0.8, 0.15);
+            const arm1 = new THREE.Mesh(arm1Geom, material);
+            arm1.position.set(0, 0.9, 0);
+            arm1.rotation.z = 0.3;
+            robotGroup.add(arm1);
+
+            const joint2Geom = new THREE.SphereGeometry(0.12, 16, 16);
+            const joint2 = new THREE.Mesh(joint2Geom, material);
+            joint2.position.set(0.2, 1.3, 0);
+            robotGroup.add(joint2);
+
+            const arm2Geom = new THREE.BoxGeometry(0.12, 0.7, 0.12);
+            const arm2 = new THREE.Mesh(arm2Geom, material);
+            arm2.position.set(0.35, 1.6, 0);
+            arm2.rotation.z = -0.5;
+            robotGroup.add(arm2);
+
+            const joint3Geom = new THREE.SphereGeometry(0.1, 16, 16);
+            const joint3 = new THREE.Mesh(joint3Geom, material);
+            joint3.position.set(0.15, 1.95, 0);
+            robotGroup.add(joint3);
+
+            const endGeom = new THREE.BoxGeometry(0.08, 0.25, 0.08);
+            const end = new THREE.Mesh(endGeom, material);
+            end.position.set(0.1, 2.15, 0);
+            robotGroup.add(end);
+
+            robotGroup.position.set(x, 0.4, z);
+            robotGroup.castShadow = true;
+
+            return robotGroup;
+        }
+
+        const robot1 = createRobotArm(orangeRobotMaterial, -1.5, 0);
+        robot1.rotation.y = Math.PI / 4;
+        cellGroup.add(robot1);
+
+        const robot2 = createRobotArm(orangeRobotMaterial, 1.5, 0);
+        robot2.rotation.y = -Math.PI / 4;
+        cellGroup.add(robot2);
+
+        const robot3 = createRobotArm(whiteRobotMaterial, -2.2, -1.5);
+        robot3.rotation.y = Math.PI / 2;
+        robot3.scale.set(0.8, 0.8, 0.8);
+        cellGroup.add(robot3);
+
+        // === EQUIPMENT ===
+        const conveyorGeom = new THREE.BoxGeometry(3, 0.1, 1.2);
+        const conveyor = new THREE.Mesh(conveyorGeom, equipmentMaterial);
+        conveyor.position.set(0, 0.55, 0.5);
+        cellGroup.add(conveyor);
+
+        const box1Geom = new THREE.BoxGeometry(0.8, 0.6, 0.6);
+        const box1 = new THREE.Mesh(box1Geom, equipmentMaterial);
+        box1.position.set(-2, 0.7, 1.5);
+        cellGroup.add(box1);
+
+        const box2Geom = new THREE.BoxGeometry(0.6, 0.8, 0.5);
+        const box2 = new THREE.Mesh(box2Geom, equipmentMaterial);
+        box2.position.set(2.2, 0.8, 1.2);
+        cellGroup.add(box2);
+
+        const spoolGeom = new THREE.CylinderGeometry(0.4, 0.4, 0.15, 32);
+        const spool = new THREE.Mesh(spoolGeom, equipmentMaterial);
+        spool.position.set(1, 3.2, -1.8);
+        spool.rotation.x = Math.PI / 2;
+        cellGroup.add(spool);
+
+        const magazineGeom = new THREE.BoxGeometry(0.5, 1.2, 0.4);
+        for (let i = 0; i < 3; i++) {
+            const magazine = new THREE.Mesh(magazineGeom, equipmentMaterial);
+            magazine.position.set(-2.5, 1, -1.5 + i * 0.5);
+            cellGroup.add(magazine);
+        }
+
+        const rightEquipGeom = new THREE.BoxGeometry(0.8, 1.5, 1.2);
+        const rightEquip = new THREE.Mesh(rightEquipGeom, equipmentMaterial);
+        rightEquip.position.set(2.3, 1.15, -0.8);
+        cellGroup.add(rightEquip);
+
+        // === STATUS LIGHTS ===
+        const statusLights = [
+            { color: 0xff0000, y: 0.9 },
+            { color: 0xffaa00, y: 0.75 },
+            { color: 0x00ff00, y: 0.6 }
+        ];
+
+        statusLights.forEach(light => {
+            const lightGeom = new THREE.CircleGeometry(0.03, 16);
+            const lightMat = new THREE.MeshStandardMaterial({
+                color: light.color,
+                emissive: light.color,
+                emissiveIntensity: 1
+            });
+            const statusLight = new THREE.Mesh(lightGeom, lightMat);
+            statusLight.position.set(0, light.y, cellDepth/2 + 0.01);
+            cellGroup.add(statusLight);
+        });
+
+        // === CELLIOS LOGO ===
+        const logoGeom = new THREE.PlaneGeometry(0.8, 0.15);
+        const logoMat = new THREE.MeshStandardMaterial({
+            color: 0x4ade80,
+            emissive: 0x4ade80,
+            emissiveIntensity: 0.5
+        });
+        const logo = new THREE.Mesh(logoGeom, logoMat);
+        logo.position.set(0.5, 0.4, cellDepth/2 + 0.01);
+        cellGroup.add(logo);
+
+        scene.add(cellGroup);
+
+        // Ground plane
+        const groundGeometry = new THREE.PlaneGeometry(30, 30);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0x111111,
+            metalness: 0.5,
+            roughness: 0.8
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0x333333, 0x222222);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // === VR STEREO EFFECT ===
+        let stereoEffect = null;
+
+        class StereoEffect {
+            constructor(renderer) {
+                this.renderer = renderer;
+                this.eyeSeparation = 0.064; // 64mm typical eye separation
+                this.cameras = {
+                    left: new THREE.PerspectiveCamera(),
+                    right: new THREE.PerspectiveCamera()
+                };
+            }
+
+            setSize(width, height) {
+                this.renderer.setSize(width, height);
+            }
+
+            render(scene, camera) {
+                const size = new THREE.Vector2();
+                this.renderer.getSize(size);
+
+                // Setup cameras
+                this.cameras.left.copy(camera);
+                this.cameras.right.copy(camera);
+
+                this.cameras.left.aspect = size.x / 2 / size.y;
+                this.cameras.right.aspect = size.x / 2 / size.y;
+
+                this.cameras.left.updateProjectionMatrix();
+                this.cameras.right.updateProjectionMatrix();
+
+                // Offset cameras
+                const offset = new THREE.Vector3(this.eyeSeparation / 2, 0, 0);
+                offset.applyQuaternion(camera.quaternion);
+
+                this.cameras.left.position.copy(camera.position).sub(offset);
+                this.cameras.right.position.copy(camera.position).add(offset);
+
+                this.cameras.left.quaternion.copy(camera.quaternion);
+                this.cameras.right.quaternion.copy(camera.quaternion);
+
+                // Render
+                this.renderer.setScissorTest(true);
+
+                // Left eye
+                this.renderer.setScissor(0, 0, size.x / 2, size.y);
+                this.renderer.setViewport(0, 0, size.x / 2, size.y);
+                this.renderer.render(scene, this.cameras.left);
+
+                // Right eye
+                this.renderer.setScissor(size.x / 2, 0, size.x / 2, size.y);
+                this.renderer.setViewport(size.x / 2, 0, size.x / 2, size.y);
+                this.renderer.render(scene, this.cameras.right);
+
+                this.renderer.setScissorTest(false);
+            }
+        }
+
+        // Device Orientation Controls
+        function handleOrientation(event) {
+            if (!vrMode) return;
+
+            deviceOrientation.alpha = event.alpha || 0;
+            deviceOrientation.beta = event.beta || 0;
+            deviceOrientation.gamma = event.gamma || 0;
+
+            if (initialOrientation === null) {
+                initialOrientation = {
+                    alpha: deviceOrientation.alpha,
+                    beta: deviceOrientation.beta,
+                    gamma: deviceOrientation.gamma
+                };
+            }
+        }
+
+        function updateCameraRotation() {
+            if (!vrMode || initialOrientation === null) return;
+
+            const alpha = THREE.MathUtils.degToRad(deviceOrientation.alpha - initialOrientation.alpha);
+            const beta = THREE.MathUtils.degToRad(deviceOrientation.beta);
+            const gamma = THREE.MathUtils.degToRad(deviceOrientation.gamma);
+
+            // Create rotation from device orientation
+            const euler = new THREE.Euler();
+            const q0 = new THREE.Quaternion();
+            const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+
+            euler.set(beta, alpha, -gamma, 'YXZ');
+            camera.quaternion.setFromEuler(euler);
+            camera.quaternion.multiply(q1);
+
+            // Adjust for screen orientation
+            const screenOrientation = window.orientation || 0;
+            q0.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -THREE.MathUtils.degToRad(screenOrientation));
+            camera.quaternion.multiply(q0);
+        }
+
+        // Start VR Mode
         async function startVR() {
-            // iOS Berechtigung für Sensoren
+            // Request device orientation permission (iOS)
             if (typeof DeviceMotionEvent !== 'undefined' &&
                 typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
                     await DeviceMotionEvent.requestPermission();
                 } catch (e) {
-                    console.log('Sensor permission error:', e);
+                    console.log('Motion permission error:', e);
                 }
             }
 
@@ -196,19 +527,72 @@
                 }
             }
 
-            // Overlay verstecken
+            // Add orientation listener
+            window.addEventListener('deviceorientation', handleOrientation, true);
+
+            // Enable VR mode
+            vrMode = true;
+            stereoEffect = new StereoEffect(renderer);
+            stereoEffect.setSize(window.innerWidth, window.innerHeight);
+
+            // Hide overlay
             overlay.classList.add('hidden');
 
-            // VR-Modus starten
-            scene.enterVR();
+            // Fullscreen
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(e => {});
+            }
+
+            // Lock screen orientation to landscape
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(e => {});
+            }
         }
 
-        // Bei Klick/Touch starten
+        // Event listeners
         overlay.addEventListener('click', startVR);
         overlay.addEventListener('touchend', function(e) {
             e.preventDefault();
             startVR();
         });
+
+        // Animation
+        let time = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+
+            // Animate robots
+            robot1.rotation.y = Math.PI / 4 + Math.sin(time) * 0.1;
+            robot2.rotation.y = -Math.PI / 4 + Math.cos(time) * 0.1;
+            robot3.rotation.y = Math.PI / 2 + Math.sin(time * 0.8) * 0.15;
+
+            // Animate LEDs
+            ledMaterial.emissiveIntensity = 1.5 + Math.sin(time * 2) * 0.5;
+
+            // Update camera rotation from device orientation
+            updateCameraRotation();
+
+            // Render
+            if (vrMode && stereoEffect) {
+                stereoEffect.render(scene, camera);
+            } else {
+                renderer.render(scene, camera);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (stereoEffect) {
+                stereoEffect.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        animate();
+        console.log('CELLIOS VR initialized');
     </script>
 </body>
 </html>
