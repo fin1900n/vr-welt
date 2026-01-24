@@ -63,6 +63,74 @@
         .hidden {
             display: none !important;
         }
+
+        /* Info Panel für VR */
+        #info-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #4ade80;
+            border-radius: 15px;
+            padding: 20px 30px;
+            color: white;
+            z-index: 1000;
+            max-width: 80%;
+            text-align: center;
+            display: none;
+        }
+
+        #info-panel.visible {
+            display: block;
+        }
+
+        #info-panel h2 {
+            color: #4ade80;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        #info-panel .info-type {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+
+        #info-panel .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            text-align: left;
+            margin-bottom: 15px;
+        }
+
+        #info-panel .info-label {
+            color: #888;
+            font-size: 12px;
+        }
+
+        #info-panel .info-value {
+            color: #fff;
+            font-size: 14px;
+        }
+
+        #info-panel .info-description {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.5;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+            margin-top: 10px;
+        }
+
+        #info-panel .close-hint {
+            color: #666;
+            font-size: 11px;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
@@ -71,6 +139,32 @@
         <div class="tap-icon">👆</div>
         <p><b>Tippe irgendwo</b> um zu starten</p>
         <p>Dann Handy in VR-Brille stecken</p>
+        <p style="margin-top: 20px; color: #4ade80;">Schau auf Objekte um Infos zu sehen</p>
+    </div>
+
+    <div id="info-panel">
+        <div class="info-type" id="panel-type">Bauteil</div>
+        <h2 id="panel-name">-</h2>
+        <div class="info-grid">
+            <div>
+                <div class="info-label">Hersteller</div>
+                <div class="info-value" id="panel-manufacturer">-</div>
+            </div>
+            <div>
+                <div class="info-label">Modell</div>
+                <div class="info-value" id="panel-model">-</div>
+            </div>
+            <div>
+                <div class="info-label">Kategorie</div>
+                <div class="info-value" id="panel-category">-</div>
+            </div>
+            <div>
+                <div class="info-label">Status</div>
+                <div class="info-value" id="panel-status">-</div>
+            </div>
+        </div>
+        <div class="info-description" id="panel-description">-</div>
+        <div class="close-hint">Schau woanders hin zum Schließen</div>
     </div>
 
     <div id="canvas-container"></div>
@@ -86,27 +180,39 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { VRButton } from 'three/addons/webxr/VRButton.js';
 
         let scene, camera, renderer;
         let vrMode = false;
         let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
         let initialOrientation = null;
 
+        // Gaze cursor variables
+        let gazeTarget = null;
+        let gazeProgress = 0;
+        const gazeTime = 1.5; // Sekunden bis Info erscheint
+        let cursorRing, cursorProgress, cursorDot;
+        let infoVisible = false;
+        let lastGazeTarget = null;
+
+        // Raycaster
+        const raycaster = new THREE.Raycaster();
+        const interactiveObjects = [];
+
         const overlay = document.getElementById('start-overlay');
+        const infoPanel = document.getElementById('info-panel');
 
         // Scene setup
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0a0a0a);
 
-        // Camera - Position in der Mitte der Zelle
+        // Camera
         camera = new THREE.PerspectiveCamera(
             75,
             window.innerWidth / window.innerHeight,
             0.1,
             1000
         );
-        camera.position.set(0, 1.6, 0); // Augenhöhe
+        camera.position.set(0, 1.6, 0);
 
         // Renderer
         renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -114,8 +220,72 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.xr.enabled = true;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // === CURSOR erstellen ===
+        function createCursor() {
+            const cursorGroup = new THREE.Group();
+
+            // Äußerer Ring (Hintergrund)
+            const ringGeometry = new THREE.RingGeometry(0.018, 0.022, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.5,
+                side: THREE.DoubleSide
+            });
+            cursorRing = new THREE.Mesh(ringGeometry, ringMaterial);
+            cursorGroup.add(cursorRing);
+
+            // Progress Ring (füllt sich)
+            const progressGeometry = new THREE.RingGeometry(0.018, 0.024, 32, 1, 0, 0);
+            const progressMaterial = new THREE.MeshBasicMaterial({
+                color: 0x4ade80,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide
+            });
+            cursorProgress = new THREE.Mesh(progressGeometry, progressMaterial);
+            cursorGroup.add(cursorProgress);
+
+            // Punkt in der Mitte
+            const dotGeometry = new THREE.CircleGeometry(0.004, 16);
+            const dotMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                side: THREE.DoubleSide
+            });
+            cursorDot = new THREE.Mesh(dotGeometry, dotMaterial);
+            cursorGroup.add(cursorDot);
+
+            // Cursor vor der Kamera platzieren
+            cursorGroup.position.set(0, 0, -0.5);
+            camera.add(cursorGroup);
+            scene.add(camera);
+
+            return cursorGroup;
+        }
+
+        // Progress Ring updaten
+        function updateCursorProgress(progress) {
+            const angle = progress * Math.PI * 2;
+            cursorProgress.geometry.dispose();
+            cursorProgress.geometry = new THREE.RingGeometry(0.018, 0.024, 32, 1, -Math.PI/2, angle);
+        }
+
+        // Cursor Farbe ändern
+        function setCursorHover(isHovering) {
+            if (isHovering) {
+                cursorRing.material.color.setHex(0x4ade80);
+                cursorRing.material.opacity = 0.8;
+                cursorDot.material.color.setHex(0x4ade80);
+            } else {
+                cursorRing.material.color.setHex(0xffffff);
+                cursorRing.material.opacity = 0.5;
+                cursorDot.material.color.setHex(0xffffff);
+            }
+        }
+
+        createCursor();
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -182,39 +352,67 @@
         const cellHeight = 3.5;
         const frameThickness = 0.08;
 
-        // Group for the entire cell
         const cellGroup = new THREE.Group();
+
+        // Helper: Objekt interaktiv machen
+        function makeInteractive(mesh, info) {
+            mesh.userData = { interactive: true, info: info };
+            interactiveObjects.push(mesh);
+        }
 
         // === BASE ===
         const baseGeometry = new THREE.BoxGeometry(cellWidth, 0.4, cellDepth);
         const base = new THREE.Mesh(baseGeometry, baseMaterial);
         base.position.y = 0.2;
         base.receiveShadow = true;
+        makeInteractive(base, {
+            name: "Zellenbasis",
+            type: "Grundstruktur",
+            manufacturer: "CELLIOS",
+            model: "BASE-6000",
+            category: "Tragstruktur",
+            status: "Aktiv",
+            description: "Die Hauptbasis der Roboterzelle. Bietet eine stabile Plattform für alle Komponenten."
+        });
         cellGroup.add(base);
 
-        // Base front panel
+        // Front panel
         const frontPanelGeometry = new THREE.BoxGeometry(cellWidth, 0.8, 0.05);
         const frontPanel = new THREE.Mesh(frontPanelGeometry, baseMaterial);
         frontPanel.position.set(0, 0.6, cellDepth / 2);
+        makeInteractive(frontPanel, {
+            name: "Frontverkleidung",
+            type: "Verkleidung",
+            manufacturer: "CELLIOS",
+            model: "PANEL-F1",
+            category: "Gehäuse",
+            status: "Aktiv",
+            description: "Dekorative und funktionale Frontverkleidung mit Status-LEDs."
+        });
         cellGroup.add(frontPanel);
 
         // === FRAME POSTS ===
-        function createFramePost(x, z) {
+        function createFramePost(x, z, name) {
             const postGeometry = new THREE.BoxGeometry(frameThickness, cellHeight, frameThickness);
             const post = new THREE.Mesh(postGeometry, frameMaterial);
             post.position.set(x, cellHeight / 2 + 0.4, z);
             post.castShadow = true;
+            makeInteractive(post, {
+                name: name,
+                type: "Rahmen",
+                manufacturer: "Bosch Rexroth",
+                model: "45x45 Aluminiumprofil",
+                category: "Struktur",
+                status: "Aktiv",
+                description: "Hochfestes Aluminium-Strangpressprofil für das tragende Gerüst."
+            });
             return post;
         }
 
-        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2));
-        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2));
-        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2));
-        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2));
-        cellGroup.add(createFramePost(-cellWidth/6, -cellDepth/2 + frameThickness/2));
-        cellGroup.add(createFramePost(cellWidth/6, -cellDepth/2 + frameThickness/2));
-        cellGroup.add(createFramePost(-cellWidth/6, cellDepth/2 - frameThickness/2));
-        cellGroup.add(createFramePost(cellWidth/6, cellDepth/2 - frameThickness/2));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2, "Eckpfosten Hinten-Links"));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2, "Eckpfosten Hinten-Rechts"));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2, "Eckpfosten Vorne-Links"));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2, "Eckpfosten Vorne-Rechts"));
 
         // === FRAME HORIZONTALS ===
         function createHorizontalFrame(x, y, z, width, depth) {
@@ -230,44 +428,57 @@
         cellGroup.add(createHorizontalFrame(0, topY, cellDepth/2 - frameThickness/2, cellWidth, frameThickness));
         cellGroup.add(createHorizontalFrame(-cellWidth/2 + frameThickness/2, topY, 0, frameThickness, cellDepth));
         cellGroup.add(createHorizontalFrame(cellWidth/2 - frameThickness/2, topY, 0, frameThickness, cellDepth));
-        cellGroup.add(createHorizontalFrame(0, topY, 0, cellWidth, frameThickness));
 
         // === GLASS PANELS ===
-        function createGlassPanel(x, y, z, width, height, rotationY) {
+        function createGlassPanel(x, y, z, width, height, rotationY, name) {
             const glassGeometry = new THREE.PlaneGeometry(width, height);
             const glass = new THREE.Mesh(glassGeometry, glassMaterial);
             glass.position.set(x, y, z);
             glass.rotation.y = rotationY;
+            makeInteractive(glass, {
+                name: name,
+                type: "Schutzscheibe",
+                manufacturer: "Schott AG",
+                model: "CONTURAN Safety Glass",
+                category: "Sicherheit",
+                status: "Aktiv",
+                description: "Entspiegeltes Sicherheitsglas nach EN ISO 12100."
+            });
             return glass;
         }
 
         const glassHeight = cellHeight - 0.8;
         const glassY = glassHeight / 2 + 1.0;
 
-        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0));
-        cellGroup.add(createGlassPanel(cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0));
-        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, -cellDepth/2 + 0.02, cellWidth/3 - 0.1, glassHeight, 0));
-        cellGroup.add(createGlassPanel(cellWidth/3, glassY, -cellDepth/2 + 0.02, cellWidth/3 - 0.1, glassHeight, 0));
-        cellGroup.add(createGlassPanel(-cellWidth/2 + 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2));
-        cellGroup.add(createGlassPanel(cellWidth/2 - 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2));
+        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0, "Frontscheibe Links"));
+        cellGroup.add(createGlassPanel(cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0, "Frontscheibe Rechts"));
+        cellGroup.add(createGlassPanel(-cellWidth/2 + 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2, "Seitenscheibe Links"));
+        cellGroup.add(createGlassPanel(cellWidth/2 - 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2, "Seitenscheibe Rechts"));
 
         // === LED STRIPS ===
-        function createLedStrip(x, y, z, length, rotationY) {
+        function createLedStrip(x, y, z, length, rotationY, name) {
             const ledGeometry = new THREE.BoxGeometry(length, 0.03, 0.05);
             const led = new THREE.Mesh(ledGeometry, ledMaterial);
             led.position.set(x, y, z);
             led.rotation.y = rotationY;
+            makeInteractive(led, {
+                name: name,
+                type: "Beleuchtung",
+                manufacturer: "Signify (Philips)",
+                model: "Fortimo LED Line",
+                category: "Beleuchtung",
+                status: "Aktiv",
+                description: "LED-Streifen für optimale Ausleuchtung. Farbtemperatur 5000K."
+            });
             return led;
         }
 
         const ledY = topY + 0.02;
-        cellGroup.add(createLedStrip(0, ledY, -cellDepth/2 + 0.1, cellWidth - 0.2, 0));
-        cellGroup.add(createLedStrip(0, ledY, cellDepth/2 - 0.1, cellWidth - 0.2, 0));
-        cellGroup.add(createLedStrip(-cellWidth/2 + 0.1, ledY, 0, cellDepth - 0.2, Math.PI / 2));
-        cellGroup.add(createLedStrip(cellWidth/2 - 0.1, ledY, 0, cellDepth - 0.2, Math.PI / 2));
+        cellGroup.add(createLedStrip(0, ledY, -cellDepth/2 + 0.1, cellWidth - 0.2, 0, "LED-Streifen Hinten"));
+        cellGroup.add(createLedStrip(0, ledY, cellDepth/2 - 0.1, cellWidth - 0.2, 0, "LED-Streifen Vorne"));
 
         // === ROBOTS ===
-        function createRobotArm(material, x, z) {
+        function createRobotArm(material, x, z, info) {
             const robotGroup = new THREE.Group();
 
             const baseGeom = new THREE.CylinderGeometry(0.25, 0.3, 0.2, 16);
@@ -308,20 +519,49 @@
             robotGroup.add(end);
 
             robotGroup.position.set(x, 0.4, z);
-            robotGroup.castShadow = true;
+
+            // Alle Teile des Roboters interaktiv machen
+            robotGroup.children.forEach(child => {
+                child.userData = { interactive: true, info: info };
+                interactiveObjects.push(child);
+            });
 
             return robotGroup;
         }
 
-        const robot1 = createRobotArm(orangeRobotMaterial, -1.5, 0);
+        const robot1 = createRobotArm(orangeRobotMaterial, -1.5, 0, {
+            name: "Roboter 1 (KUKA)",
+            type: "Industrieroboter",
+            manufacturer: "KUKA",
+            model: "KR 6 R900 sixx",
+            category: "Handling",
+            status: "Aktiv - Produktion",
+            description: "6-Achs-Industrieroboter für Pick-and-Place. Tragkraft 6kg, Reichweite 900mm."
+        });
         robot1.rotation.y = Math.PI / 4;
         cellGroup.add(robot1);
 
-        const robot2 = createRobotArm(orangeRobotMaterial, 1.5, 0);
+        const robot2 = createRobotArm(orangeRobotMaterial, 1.5, 0, {
+            name: "Roboter 2 (KUKA)",
+            type: "Industrieroboter",
+            manufacturer: "KUKA",
+            model: "KR 6 R900 sixx",
+            category: "Montage",
+            status: "Aktiv - Produktion",
+            description: "6-Achs-Industrieroboter für Montageaufgaben. Tragkraft 6kg, Reichweite 900mm."
+        });
         robot2.rotation.y = -Math.PI / 4;
         cellGroup.add(robot2);
 
-        const robot3 = createRobotArm(whiteRobotMaterial, -2.2, -1.5);
+        const robot3 = createRobotArm(whiteRobotMaterial, -2.2, -1.5, {
+            name: "Roboter 3 (ABB)",
+            type: "Industrieroboter",
+            manufacturer: "ABB",
+            model: "IRB 1200-5/0.9",
+            category: "Zuführung",
+            status: "Aktiv - Produktion",
+            description: "Kompakter 6-Achs-Roboter für Zuführung. Tragkraft 5kg, Reichweite 900mm."
+        });
         robot3.rotation.y = Math.PI / 2;
         robot3.scale.set(0.8, 0.8, 0.8);
         cellGroup.add(robot3);
@@ -330,37 +570,77 @@
         const conveyorGeom = new THREE.BoxGeometry(3, 0.1, 1.2);
         const conveyor = new THREE.Mesh(conveyorGeom, equipmentMaterial);
         conveyor.position.set(0, 0.55, 0.5);
+        makeInteractive(conveyor, {
+            name: "Förderband",
+            type: "Transport",
+            manufacturer: "Bosch Rexroth",
+            model: "VarioFlow plus",
+            category: "Transport",
+            status: "Aktiv",
+            description: "Modulares Transfersystem für flexible Werkstückführung."
+        });
         cellGroup.add(conveyor);
 
         const box1Geom = new THREE.BoxGeometry(0.8, 0.6, 0.6);
         const box1 = new THREE.Mesh(box1Geom, equipmentMaterial);
         box1.position.set(-2, 0.7, 1.5);
+        makeInteractive(box1, {
+            name: "Steuerungsschrank",
+            type: "Schaltschrank",
+            manufacturer: "Rittal",
+            model: "AX Kompaktschrank",
+            category: "Elektrik",
+            status: "Aktiv",
+            description: "Enthält SPS, Frequenzumrichter und Sicherheitsrelais."
+        });
         cellGroup.add(box1);
 
         const box2Geom = new THREE.BoxGeometry(0.6, 0.8, 0.5);
         const box2 = new THREE.Mesh(box2Geom, equipmentMaterial);
         box2.position.set(2.2, 0.8, 1.2);
+        makeInteractive(box2, {
+            name: "Pneumatik-Einheit",
+            type: "Versorgung",
+            manufacturer: "Festo",
+            model: "MSB6-AGD",
+            category: "Pneumatik",
+            status: "Aktiv",
+            description: "Wartungseinheit für Druckluftversorgung. Betriebsdruck 6 bar."
+        });
         cellGroup.add(box2);
-
-        const spoolGeom = new THREE.CylinderGeometry(0.4, 0.4, 0.15, 32);
-        const spool = new THREE.Mesh(spoolGeom, equipmentMaterial);
-        spool.position.set(1, 3.2, -1.8);
-        spool.rotation.x = Math.PI / 2;
-        cellGroup.add(spool);
-
-        const magazineGeom = new THREE.BoxGeometry(0.5, 1.2, 0.4);
-        for (let i = 0; i < 3; i++) {
-            const magazine = new THREE.Mesh(magazineGeom, equipmentMaterial);
-            magazine.position.set(-2.5, 1, -1.5 + i * 0.5);
-            cellGroup.add(magazine);
-        }
 
         const rightEquipGeom = new THREE.BoxGeometry(0.8, 1.5, 1.2);
         const rightEquip = new THREE.Mesh(rightEquipGeom, equipmentMaterial);
         rightEquip.position.set(2.3, 1.15, -0.8);
+        makeInteractive(rightEquip, {
+            name: "Prüfstation",
+            type: "Qualitätskontrolle",
+            manufacturer: "Keyence",
+            model: "CV-X Series",
+            category: "Inspektion",
+            status: "Aktiv",
+            description: "Automatische Bildverarbeitung für 100% Qualitätskontrolle."
+        });
         cellGroup.add(rightEquip);
 
-        // === STATUS LIGHTS ===
+        // Magazine
+        const magazineGeom = new THREE.BoxGeometry(0.5, 1.2, 0.4);
+        for (let i = 0; i < 3; i++) {
+            const magazine = new THREE.Mesh(magazineGeom, equipmentMaterial);
+            magazine.position.set(-2.5, 1, -1.5 + i * 0.5);
+            makeInteractive(magazine, {
+                name: `Magazin ${i + 1}`,
+                type: "Bauteilmagazin",
+                manufacturer: "Schunk",
+                model: "VERO-S NSE-T mini",
+                category: "Zuführung",
+                status: i === 0 ? "Voll" : i === 1 ? "Teilweise gefüllt" : "Leer",
+                description: "Stapelmagazin für Bauteile. Kapazität 50 Einheiten."
+            });
+            cellGroup.add(magazine);
+        }
+
+        // Status Lights
         const statusLights = [
             { color: 0xff0000, y: 0.9 },
             { color: 0xffaa00, y: 0.75 },
@@ -379,20 +659,9 @@
             cellGroup.add(statusLight);
         });
 
-        // === CELLIOS LOGO ===
-        const logoGeom = new THREE.PlaneGeometry(0.8, 0.15);
-        const logoMat = new THREE.MeshStandardMaterial({
-            color: 0x4ade80,
-            emissive: 0x4ade80,
-            emissiveIntensity: 0.5
-        });
-        const logo = new THREE.Mesh(logoGeom, logoMat);
-        logo.position.set(0.5, 0.4, cellDepth/2 + 0.01);
-        cellGroup.add(logo);
-
         scene.add(cellGroup);
 
-        // Ground plane
+        // Ground
         const groundGeometry = new THREE.PlaneGeometry(30, 30);
         const groundMaterial = new THREE.MeshStandardMaterial({
             color: 0x111111,
@@ -401,7 +670,6 @@
         });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
-        ground.position.y = 0;
         ground.receiveShadow = true;
         scene.add(ground);
 
@@ -415,7 +683,7 @@
         class StereoEffect {
             constructor(renderer) {
                 this.renderer = renderer;
-                this.eyeSeparation = 0.064; // 64mm typical eye separation
+                this.eyeSeparation = 0.064;
                 this.cameras = {
                     left: new THREE.PerspectiveCamera(),
                     right: new THREE.PerspectiveCamera()
@@ -430,7 +698,6 @@
                 const size = new THREE.Vector2();
                 this.renderer.getSize(size);
 
-                // Setup cameras
                 this.cameras.left.copy(camera);
                 this.cameras.right.copy(camera);
 
@@ -440,7 +707,6 @@
                 this.cameras.left.updateProjectionMatrix();
                 this.cameras.right.updateProjectionMatrix();
 
-                // Offset cameras
                 const offset = new THREE.Vector3(this.eyeSeparation / 2, 0, 0);
                 offset.applyQuaternion(camera.quaternion);
 
@@ -450,15 +716,12 @@
                 this.cameras.left.quaternion.copy(camera.quaternion);
                 this.cameras.right.quaternion.copy(camera.quaternion);
 
-                // Render
                 this.renderer.setScissorTest(true);
 
-                // Left eye
                 this.renderer.setScissor(0, 0, size.x / 2, size.y);
                 this.renderer.setViewport(0, 0, size.x / 2, size.y);
                 this.renderer.render(scene, this.cameras.left);
 
-                // Right eye
                 this.renderer.setScissor(size.x / 2, 0, size.x / 2, size.y);
                 this.renderer.setViewport(size.x / 2, 0, size.x / 2, size.y);
                 this.renderer.render(scene, this.cameras.right);
@@ -467,20 +730,15 @@
             }
         }
 
-        // Device Orientation Controls
+        // Device Orientation
         function handleOrientation(event) {
             if (!vrMode) return;
-
             deviceOrientation.alpha = event.alpha || 0;
             deviceOrientation.beta = event.beta || 0;
             deviceOrientation.gamma = event.gamma || 0;
 
             if (initialOrientation === null) {
-                initialOrientation = {
-                    alpha: deviceOrientation.alpha,
-                    beta: deviceOrientation.beta,
-                    gamma: deviceOrientation.gamma
-                };
+                initialOrientation = { ...deviceOrientation };
             }
         }
 
@@ -491,7 +749,6 @@
             const beta = THREE.MathUtils.degToRad(deviceOrientation.beta);
             const gamma = THREE.MathUtils.degToRad(deviceOrientation.gamma);
 
-            // Create rotation from device orientation
             const euler = new THREE.Euler();
             const q0 = new THREE.Quaternion();
             const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
@@ -500,56 +757,106 @@
             camera.quaternion.setFromEuler(euler);
             camera.quaternion.multiply(q1);
 
-            // Adjust for screen orientation
             const screenOrientation = window.orientation || 0;
             q0.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -THREE.MathUtils.degToRad(screenOrientation));
             camera.quaternion.multiply(q0);
         }
 
-        // Start VR Mode
+        // === GAZE INTERACTION ===
+        function updateGaze(deltaTime) {
+            // Raycast von Kamera-Mitte
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(interactiveObjects);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+
+                if (hit.userData.interactive) {
+                    setCursorHover(true);
+
+                    if (gazeTarget === hit) {
+                        // Gleisches Objekt - Progress erhöhen
+                        gazeProgress += deltaTime;
+                        updateCursorProgress(Math.min(gazeProgress / gazeTime, 1));
+
+                        if (gazeProgress >= gazeTime && !infoVisible) {
+                            showInfo(hit.userData.info);
+                        }
+                    } else {
+                        // Neues Objekt
+                        gazeTarget = hit;
+                        gazeProgress = 0;
+                        updateCursorProgress(0);
+
+                        if (infoVisible) {
+                            hideInfo();
+                        }
+                    }
+                }
+            } else {
+                // Nichts getroffen
+                setCursorHover(false);
+                gazeTarget = null;
+                gazeProgress = 0;
+                updateCursorProgress(0);
+
+                if (infoVisible) {
+                    hideInfo();
+                }
+            }
+        }
+
+        function showInfo(info) {
+            document.getElementById('panel-name').textContent = info.name;
+            document.getElementById('panel-type').textContent = info.type;
+            document.getElementById('panel-manufacturer').textContent = info.manufacturer;
+            document.getElementById('panel-model').textContent = info.model;
+            document.getElementById('panel-category').textContent = info.category;
+            document.getElementById('panel-status').textContent = info.status;
+            document.getElementById('panel-description').textContent = info.description;
+
+            infoPanel.classList.add('visible');
+            infoVisible = true;
+        }
+
+        function hideInfo() {
+            infoPanel.classList.remove('visible');
+            infoVisible = false;
+        }
+
+        // Start VR
         async function startVR() {
-            // Request device orientation permission (iOS)
             if (typeof DeviceMotionEvent !== 'undefined' &&
                 typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
                     await DeviceMotionEvent.requestPermission();
-                } catch (e) {
-                    console.log('Motion permission error:', e);
-                }
+                } catch (e) {}
             }
 
             if (typeof DeviceOrientationEvent !== 'undefined' &&
                 typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     await DeviceOrientationEvent.requestPermission();
-                } catch (e) {
-                    console.log('Orientation permission error:', e);
-                }
+                } catch (e) {}
             }
 
-            // Add orientation listener
             window.addEventListener('deviceorientation', handleOrientation, true);
 
-            // Enable VR mode
             vrMode = true;
             stereoEffect = new StereoEffect(renderer);
             stereoEffect.setSize(window.innerWidth, window.innerHeight);
 
-            // Hide overlay
             overlay.classList.add('hidden');
 
-            // Fullscreen
             if (document.documentElement.requestFullscreen) {
                 document.documentElement.requestFullscreen().catch(e => {});
             }
 
-            // Lock screen orientation to landscape
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape').catch(e => {});
             }
         }
 
-        // Event listeners
         overlay.addEventListener('click', startVR);
         overlay.addEventListener('touchend', function(e) {
             e.preventDefault();
@@ -558,21 +865,32 @@
 
         // Animation
         let time = 0;
+        let lastTime = performance.now();
 
         function animate() {
             requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const deltaTime = (now - lastTime) / 1000;
+            lastTime = now;
+
             time += 0.01;
 
-            // Animate robots
+            // Roboter Animation
             robot1.rotation.y = Math.PI / 4 + Math.sin(time) * 0.1;
             robot2.rotation.y = -Math.PI / 4 + Math.cos(time) * 0.1;
             robot3.rotation.y = Math.PI / 2 + Math.sin(time * 0.8) * 0.15;
 
-            // Animate LEDs
+            // LED Animation
             ledMaterial.emissiveIntensity = 1.5 + Math.sin(time * 2) * 0.5;
 
-            // Update camera rotation from device orientation
+            // Kamera Update
             updateCameraRotation();
+
+            // Gaze Update
+            if (vrMode) {
+                updateGaze(deltaTime);
+            }
 
             // Render
             if (vrMode && stereoEffect) {
@@ -592,7 +910,7 @@
         });
 
         animate();
-        console.log('CELLIOS VR initialized');
+        console.log('CELLIOS VR with Gaze Cursor initialized');
     </script>
 </body>
 </html>
