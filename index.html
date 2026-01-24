@@ -63,74 +63,6 @@
         .hidden {
             display: none !important;
         }
-
-        /* Info Panel für VR */
-        #info-panel {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.85);
-            border: 2px solid #4ade80;
-            border-radius: 15px;
-            padding: 20px 30px;
-            color: white;
-            z-index: 1000;
-            max-width: 80%;
-            text-align: center;
-            display: none;
-        }
-
-        #info-panel.visible {
-            display: block;
-        }
-
-        #info-panel h2 {
-            color: #4ade80;
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-
-        #info-panel .info-type {
-            color: #888;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 15px;
-        }
-
-        #info-panel .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            text-align: left;
-            margin-bottom: 15px;
-        }
-
-        #info-panel .info-label {
-            color: #888;
-            font-size: 12px;
-        }
-
-        #info-panel .info-value {
-            color: #fff;
-            font-size: 14px;
-        }
-
-        #info-panel .info-description {
-            color: #aaa;
-            font-size: 13px;
-            line-height: 1.5;
-            border-top: 1px solid #333;
-            padding-top: 15px;
-            margin-top: 10px;
-        }
-
-        #info-panel .close-hint {
-            color: #666;
-            font-size: 11px;
-            margin-top: 15px;
-        }
     </style>
 </head>
 <body>
@@ -140,31 +72,6 @@
         <p><b>Tippe irgendwo</b> um zu starten</p>
         <p>Dann Handy in VR-Brille stecken</p>
         <p style="margin-top: 20px; color: #4ade80;">Schau auf Objekte um Infos zu sehen</p>
-    </div>
-
-    <div id="info-panel">
-        <div class="info-type" id="panel-type">Bauteil</div>
-        <h2 id="panel-name">-</h2>
-        <div class="info-grid">
-            <div>
-                <div class="info-label">Hersteller</div>
-                <div class="info-value" id="panel-manufacturer">-</div>
-            </div>
-            <div>
-                <div class="info-label">Modell</div>
-                <div class="info-value" id="panel-model">-</div>
-            </div>
-            <div>
-                <div class="info-label">Kategorie</div>
-                <div class="info-value" id="panel-category">-</div>
-            </div>
-            <div>
-                <div class="info-label">Status</div>
-                <div class="info-value" id="panel-status">-</div>
-            </div>
-        </div>
-        <div class="info-description" id="panel-description">-</div>
-        <div class="close-hint">Schau woanders hin zum Schließen</div>
     </div>
 
     <div id="canvas-container"></div>
@@ -189,17 +96,21 @@
         // Gaze cursor variables
         let gazeTarget = null;
         let gazeProgress = 0;
-        const gazeTime = 1.5; // Sekunden bis Info erscheint
+        const gazeTime = 1.5;
         let cursorRing, cursorProgress, cursorDot;
         let infoVisible = false;
-        let lastGazeTarget = null;
+
+        // 3D Info Panel
+        let infoPanel3D;
+        let infoPanelTexture;
+        let infoPanelCanvas;
+        let infoPanelContext;
 
         // Raycaster
         const raycaster = new THREE.Raycaster();
         const interactiveObjects = [];
 
         const overlay = document.getElementById('start-overlay');
-        const infoPanel = document.getElementById('info-panel');
 
         // Scene setup
         scene = new THREE.Scene();
@@ -222,11 +133,123 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
+        // === 3D INFO PANEL erstellen ===
+        function createInfoPanel3D() {
+            // Canvas für Text
+            infoPanelCanvas = document.createElement('canvas');
+            infoPanelCanvas.width = 512;
+            infoPanelCanvas.height = 400;
+            infoPanelContext = infoPanelCanvas.getContext('2d');
+
+            // Texture aus Canvas
+            infoPanelTexture = new THREE.CanvasTexture(infoPanelCanvas);
+            infoPanelTexture.minFilter = THREE.LinearFilter;
+
+            // Material
+            const material = new THREE.MeshBasicMaterial({
+                map: infoPanelTexture,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+
+            // Plane Geometry (Seitenverhältnis passend zum Canvas)
+            const geometry = new THREE.PlaneGeometry(0.4, 0.32);
+
+            // Mesh erstellen
+            infoPanel3D = new THREE.Mesh(geometry, material);
+            infoPanel3D.position.set(0, -0.08, -0.5); // Unter dem Cursor, vor der Kamera
+            infoPanel3D.visible = false;
+
+            // An Kamera anhängen
+            camera.add(infoPanel3D);
+        }
+
+        // Info Panel Text rendern
+        function renderInfoPanel(info) {
+            const ctx = infoPanelContext;
+            const w = infoPanelCanvas.width;
+            const h = infoPanelCanvas.height;
+
+            // Hintergrund
+            ctx.clearRect(0, 0, w, h);
+
+            // Abgerundetes Rechteck
+            const radius = 20;
+            ctx.beginPath();
+            ctx.roundRect(10, 10, w - 20, h - 20, radius);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fill();
+            ctx.strokeStyle = '#4ade80';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            // Typ (klein, oben)
+            ctx.fillStyle = '#888888';
+            ctx.font = '18px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(info.type.toUpperCase(), w / 2, 50);
+
+            // Name (groß, grün)
+            ctx.fillStyle = '#4ade80';
+            ctx.font = 'bold 28px Arial';
+            ctx.fillText(info.name, w / 2, 90);
+
+            // Trennlinie
+            ctx.beginPath();
+            ctx.moveTo(40, 110);
+            ctx.lineTo(w - 40, 110);
+            ctx.strokeStyle = '#333333';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Info Grid
+            ctx.font = '16px Arial';
+            const startY = 145;
+            const lineHeight = 50;
+
+            // Hersteller
+            ctx.fillStyle = '#888888';
+            ctx.textAlign = 'left';
+            ctx.fillText('Hersteller', 40, startY);
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'right';
+            ctx.fillText(info.manufacturer, w - 40, startY);
+
+            // Modell
+            ctx.fillStyle = '#888888';
+            ctx.textAlign = 'left';
+            ctx.fillText('Modell', 40, startY + lineHeight);
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'right';
+            ctx.fillText(info.model, w - 40, startY + lineHeight);
+
+            // Kategorie
+            ctx.fillStyle = '#888888';
+            ctx.textAlign = 'left';
+            ctx.fillText('Kategorie', 40, startY + lineHeight * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'right';
+            ctx.fillText(info.category, w - 40, startY + lineHeight * 2);
+
+            // Status
+            ctx.fillStyle = '#888888';
+            ctx.textAlign = 'left';
+            ctx.fillText('Status', 40, startY + lineHeight * 3);
+            ctx.fillStyle = info.status.includes('Aktiv') ? '#4ade80' : '#ffffff';
+            ctx.textAlign = 'right';
+            ctx.fillText(info.status, w - 40, startY + lineHeight * 3);
+
+            // Texture aktualisieren
+            infoPanelTexture.needsUpdate = true;
+        }
+
+        createInfoPanel3D();
+
         // === CURSOR erstellen ===
         function createCursor() {
             const cursorGroup = new THREE.Group();
 
-            // Äußerer Ring (Hintergrund)
+            // Äußerer Ring
             const ringGeometry = new THREE.RingGeometry(0.018, 0.022, 32);
             const ringMaterial = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
@@ -237,7 +260,7 @@
             cursorRing = new THREE.Mesh(ringGeometry, ringMaterial);
             cursorGroup.add(cursorRing);
 
-            // Progress Ring (füllt sich)
+            // Progress Ring
             const progressGeometry = new THREE.RingGeometry(0.018, 0.024, 32, 1, 0, 0);
             const progressMaterial = new THREE.MeshBasicMaterial({
                 color: 0x4ade80,
@@ -257,7 +280,6 @@
             cursorDot = new THREE.Mesh(dotGeometry, dotMaterial);
             cursorGroup.add(cursorDot);
 
-            // Cursor vor der Kamera platzieren
             cursorGroup.position.set(0, 0, -0.5);
             camera.add(cursorGroup);
             scene.add(camera);
@@ -265,14 +287,12 @@
             return cursorGroup;
         }
 
-        // Progress Ring updaten
         function updateCursorProgress(progress) {
             const angle = progress * Math.PI * 2;
             cursorProgress.geometry.dispose();
             cursorProgress.geometry = new THREE.RingGeometry(0.018, 0.024, 32, 1, -Math.PI/2, angle);
         }
 
-        // Cursor Farbe ändern
         function setCursorHover(isHovering) {
             if (isHovering) {
                 cursorRing.material.color.setHex(0x4ade80);
@@ -354,7 +374,6 @@
 
         const cellGroup = new THREE.Group();
 
-        // Helper: Objekt interaktiv machen
         function makeInteractive(mesh, info) {
             mesh.userData = { interactive: true, info: info };
             interactiveObjects.push(mesh);
@@ -371,8 +390,7 @@
             manufacturer: "CELLIOS",
             model: "BASE-6000",
             category: "Tragstruktur",
-            status: "Aktiv",
-            description: "Die Hauptbasis der Roboterzelle. Bietet eine stabile Plattform für alle Komponenten."
+            status: "Aktiv"
         });
         cellGroup.add(base);
 
@@ -386,8 +404,7 @@
             manufacturer: "CELLIOS",
             model: "PANEL-F1",
             category: "Gehäuse",
-            status: "Aktiv",
-            description: "Dekorative und funktionale Frontverkleidung mit Status-LEDs."
+            status: "Aktiv"
         });
         cellGroup.add(frontPanel);
 
@@ -401,18 +418,17 @@
                 name: name,
                 type: "Rahmen",
                 manufacturer: "Bosch Rexroth",
-                model: "45x45 Aluminiumprofil",
+                model: "45x45 Alu-Profil",
                 category: "Struktur",
-                status: "Aktiv",
-                description: "Hochfestes Aluminium-Strangpressprofil für das tragende Gerüst."
+                status: "Aktiv"
             });
             return post;
         }
 
-        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2, "Eckpfosten Hinten-Links"));
-        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2, "Eckpfosten Hinten-Rechts"));
-        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2, "Eckpfosten Vorne-Links"));
-        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2, "Eckpfosten Vorne-Rechts"));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2, "Pfosten Hinten-Links"));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2, "Pfosten Hinten-Rechts"));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2, "Pfosten Vorne-Links"));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2, "Pfosten Vorne-Rechts"));
 
         // === FRAME HORIZONTALS ===
         function createHorizontalFrame(x, y, z, width, depth) {
@@ -439,10 +455,9 @@
                 name: name,
                 type: "Schutzscheibe",
                 manufacturer: "Schott AG",
-                model: "CONTURAN Safety Glass",
+                model: "Safety Glass",
                 category: "Sicherheit",
-                status: "Aktiv",
-                description: "Entspiegeltes Sicherheitsglas nach EN ISO 12100."
+                status: "Aktiv"
             });
             return glass;
         }
@@ -464,18 +479,17 @@
             makeInteractive(led, {
                 name: name,
                 type: "Beleuchtung",
-                manufacturer: "Signify (Philips)",
-                model: "Fortimo LED Line",
+                manufacturer: "Philips",
+                model: "Fortimo LED",
                 category: "Beleuchtung",
-                status: "Aktiv",
-                description: "LED-Streifen für optimale Ausleuchtung. Farbtemperatur 5000K."
+                status: "Aktiv"
             });
             return led;
         }
 
         const ledY = topY + 0.02;
-        cellGroup.add(createLedStrip(0, ledY, -cellDepth/2 + 0.1, cellWidth - 0.2, 0, "LED-Streifen Hinten"));
-        cellGroup.add(createLedStrip(0, ledY, cellDepth/2 - 0.1, cellWidth - 0.2, 0, "LED-Streifen Vorne"));
+        cellGroup.add(createLedStrip(0, ledY, -cellDepth/2 + 0.1, cellWidth - 0.2, 0, "LED Hinten"));
+        cellGroup.add(createLedStrip(0, ledY, cellDepth/2 - 0.1, cellWidth - 0.2, 0, "LED Vorne"));
 
         // === ROBOTS ===
         function createRobotArm(material, x, z, info) {
@@ -520,7 +534,6 @@
 
             robotGroup.position.set(x, 0.4, z);
 
-            // Alle Teile des Roboters interaktiv machen
             robotGroup.children.forEach(child => {
                 child.userData = { interactive: true, info: info };
                 interactiveObjects.push(child);
@@ -530,37 +543,34 @@
         }
 
         const robot1 = createRobotArm(orangeRobotMaterial, -1.5, 0, {
-            name: "Roboter 1 (KUKA)",
+            name: "Roboter 1",
             type: "Industrieroboter",
             manufacturer: "KUKA",
-            model: "KR 6 R900 sixx",
+            model: "KR 6 R900",
             category: "Handling",
-            status: "Aktiv - Produktion",
-            description: "6-Achs-Industrieroboter für Pick-and-Place. Tragkraft 6kg, Reichweite 900mm."
+            status: "Aktiv - Produktion"
         });
         robot1.rotation.y = Math.PI / 4;
         cellGroup.add(robot1);
 
         const robot2 = createRobotArm(orangeRobotMaterial, 1.5, 0, {
-            name: "Roboter 2 (KUKA)",
+            name: "Roboter 2",
             type: "Industrieroboter",
             manufacturer: "KUKA",
-            model: "KR 6 R900 sixx",
+            model: "KR 6 R900",
             category: "Montage",
-            status: "Aktiv - Produktion",
-            description: "6-Achs-Industrieroboter für Montageaufgaben. Tragkraft 6kg, Reichweite 900mm."
+            status: "Aktiv - Produktion"
         });
         robot2.rotation.y = -Math.PI / 4;
         cellGroup.add(robot2);
 
         const robot3 = createRobotArm(whiteRobotMaterial, -2.2, -1.5, {
-            name: "Roboter 3 (ABB)",
+            name: "Roboter 3",
             type: "Industrieroboter",
             manufacturer: "ABB",
-            model: "IRB 1200-5/0.9",
+            model: "IRB 1200",
             category: "Zuführung",
-            status: "Aktiv - Produktion",
-            description: "Kompakter 6-Achs-Roboter für Zuführung. Tragkraft 5kg, Reichweite 900mm."
+            status: "Aktiv - Produktion"
         });
         robot3.rotation.y = Math.PI / 2;
         robot3.scale.set(0.8, 0.8, 0.8);
@@ -576,8 +586,7 @@
             manufacturer: "Bosch Rexroth",
             model: "VarioFlow plus",
             category: "Transport",
-            status: "Aktiv",
-            description: "Modulares Transfersystem für flexible Werkstückführung."
+            status: "Aktiv"
         });
         cellGroup.add(conveyor);
 
@@ -588,10 +597,9 @@
             name: "Steuerungsschrank",
             type: "Schaltschrank",
             manufacturer: "Rittal",
-            model: "AX Kompaktschrank",
+            model: "AX Kompakt",
             category: "Elektrik",
-            status: "Aktiv",
-            description: "Enthält SPS, Frequenzumrichter und Sicherheitsrelais."
+            status: "Aktiv"
         });
         cellGroup.add(box1);
 
@@ -604,8 +612,7 @@
             manufacturer: "Festo",
             model: "MSB6-AGD",
             category: "Pneumatik",
-            status: "Aktiv",
-            description: "Wartungseinheit für Druckluftversorgung. Betriebsdruck 6 bar."
+            status: "Aktiv"
         });
         cellGroup.add(box2);
 
@@ -618,8 +625,7 @@
             manufacturer: "Keyence",
             model: "CV-X Series",
             category: "Inspektion",
-            status: "Aktiv",
-            description: "Automatische Bildverarbeitung für 100% Qualitätskontrolle."
+            status: "Aktiv"
         });
         cellGroup.add(rightEquip);
 
@@ -632,10 +638,9 @@
                 name: `Magazin ${i + 1}`,
                 type: "Bauteilmagazin",
                 manufacturer: "Schunk",
-                model: "VERO-S NSE-T mini",
+                model: "VERO-S",
                 category: "Zuführung",
-                status: i === 0 ? "Voll" : i === 1 ? "Teilweise gefüllt" : "Leer",
-                description: "Stapelmagazin für Bauteile. Kapazität 50 Einheiten."
+                status: i === 0 ? "Voll" : i === 1 ? "Halb voll" : "Leer"
             });
             cellGroup.add(magazine);
         }
@@ -764,7 +769,6 @@
 
         // === GAZE INTERACTION ===
         function updateGaze(deltaTime) {
-            // Raycast von Kamera-Mitte
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const intersects = raycaster.intersectObjects(interactiveObjects);
 
@@ -775,52 +779,42 @@
                     setCursorHover(true);
 
                     if (gazeTarget === hit) {
-                        // Gleisches Objekt - Progress erhöhen
                         gazeProgress += deltaTime;
                         updateCursorProgress(Math.min(gazeProgress / gazeTime, 1));
 
                         if (gazeProgress >= gazeTime && !infoVisible) {
-                            showInfo(hit.userData.info);
+                            showInfo3D(hit.userData.info);
                         }
                     } else {
-                        // Neues Objekt
                         gazeTarget = hit;
                         gazeProgress = 0;
                         updateCursorProgress(0);
 
                         if (infoVisible) {
-                            hideInfo();
+                            hideInfo3D();
                         }
                     }
                 }
             } else {
-                // Nichts getroffen
                 setCursorHover(false);
                 gazeTarget = null;
                 gazeProgress = 0;
                 updateCursorProgress(0);
 
                 if (infoVisible) {
-                    hideInfo();
+                    hideInfo3D();
                 }
             }
         }
 
-        function showInfo(info) {
-            document.getElementById('panel-name').textContent = info.name;
-            document.getElementById('panel-type').textContent = info.type;
-            document.getElementById('panel-manufacturer').textContent = info.manufacturer;
-            document.getElementById('panel-model').textContent = info.model;
-            document.getElementById('panel-category').textContent = info.category;
-            document.getElementById('panel-status').textContent = info.status;
-            document.getElementById('panel-description').textContent = info.description;
-
-            infoPanel.classList.add('visible');
+        function showInfo3D(info) {
+            renderInfoPanel(info);
+            infoPanel3D.visible = true;
             infoVisible = true;
         }
 
-        function hideInfo() {
-            infoPanel.classList.remove('visible');
+        function hideInfo3D() {
+            infoPanel3D.visible = false;
             infoVisible = false;
         }
 
@@ -910,7 +904,7 @@
         });
 
         animate();
-        console.log('CELLIOS VR with Gaze Cursor initialized');
+        console.log('CELLIOS VR with 3D Info Panel initialized');
     </script>
 </body>
 </html>
