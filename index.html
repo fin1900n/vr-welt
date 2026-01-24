@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>VR Welt</title>
+    <meta name="description" content="VR Welt für Smartphone">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #vr-button {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            padding: 20px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        #vr-button:active {
+            background: #c0392b;
+        }
+
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            z-index: 9998;
+            padding: 15px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border-radius: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Drehe dein Handy ins <b>Querformat</b>, dann drücke den Button unten.
+    </div>
+
+    <button id="vr-button">🥽 VR STARTEN</button>
+
+    <a-scene
+        vr-mode-ui="enabled: true; enterVRButton: #vr-button"
+        device-orientation-permission-ui="enabled: true"
+        renderer="antialias: true"
+        embedded>
+
+        <!-- Himmel mit Gradient -->
+        <a-sky color="#87CEEB"></a-sky>
+
+        <!-- Boden -->
+        <a-plane
+            position="0 0 0"
+            rotation="-90 0 0"
+            width="100"
+            height="100"
+            color="#567d46"
+            shadow="receive: true">
+        </a-plane>
+
+        <!-- Sonne -->
+        <a-sphere
+            position="20 30 -30"
+            radius="5"
+            color="#FFD700"
+            material="emissive: #FFD700; emissiveIntensity: 0.5">
+        </a-sphere>
+
+        <!-- Rote Box -->
+        <a-box
+            position="-2 1 -5"
+            rotation="0 45 0"
+            color="#EF2D5E"
+            shadow="cast: true">
+        </a-box>
+
+        <!-- Blaue Kugel -->
+        <a-sphere
+            position="0 1.5 -6"
+            radius="1"
+            color="#3498db"
+            shadow="cast: true">
+        </a-sphere>
+
+        <!-- Grüner Zylinder -->
+        <a-cylinder
+            position="2 1 -5"
+            radius="0.5"
+            height="2"
+            color="#2ecc71"
+            shadow="cast: true">
+        </a-cylinder>
+
+        <!-- Gelber Kegel -->
+        <a-cone
+            position="-3 1 -8"
+            radius-bottom="1"
+            radius-top="0"
+            height="2"
+            color="#f1c40f"
+            shadow="cast: true">
+        </a-cone>
+
+        <!-- Violetter Torus (Ring) -->
+        <a-torus
+            position="3 2 -8"
+            radius="1"
+            radius-tubular="0.2"
+            color="#9b59b6"
+            rotation="45 45 0"
+            shadow="cast: true">
+        </a-torus>
+
+        <!-- Bäume -->
+        <a-cylinder position="-8 1.5 -10" radius="0.3" height="3" color="#8B4513"></a-cylinder>
+        <a-cone position="-8 4 -10" radius-bottom="2" height="4" color="#228B22"></a-cone>
+
+        <a-cylinder position="8 1.5 -12" radius="0.3" height="3" color="#8B4513"></a-cylinder>
+        <a-cone position="8 4 -12" radius-bottom="2" height="4" color="#228B22"></a-cone>
+
+        <a-cylinder position="5 1.5 -15" radius="0.3" height="3" color="#8B4513"></a-cylinder>
+        <a-cone position="5 4 -15" radius-bottom="2" height="4" color="#228B22"></a-cone>
+
+        <a-cylinder position="-6 1.5 -18" radius="0.3" height="3" color="#8B4513"></a-cylinder>
+        <a-cone position="-6 4 -18" radius-bottom="2" height="4" color="#228B22"></a-cone>
+
+        <!-- Wolken -->
+        <a-sphere position="-10 15 -25" radius="3" color="#ffffff" opacity="0.8"></a-sphere>
+        <a-sphere position="-7 15 -25" radius="2.5" color="#ffffff" opacity="0.8"></a-sphere>
+        <a-sphere position="-13 15 -25" radius="2" color="#ffffff" opacity="0.8"></a-sphere>
+
+        <a-sphere position="12 18 -30" radius="3.5" color="#ffffff" opacity="0.8"></a-sphere>
+        <a-sphere position="15 18 -30" radius="2.5" color="#ffffff" opacity="0.8"></a-sphere>
+        <a-sphere position="9 17 -30" radius="2" color="#ffffff" opacity="0.8"></a-sphere>
+
+        <!-- Schwebendes Objekt mit Animation -->
+        <a-dodecahedron
+            position="0 3 -10"
+            radius="0.8"
+            color="#e74c3c"
+            animation="property: rotation; to: 360 360 0; loop: true; dur: 5000; easing: linear"
+            animation__float="property: position; to: 0 4 -10; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine">
+        </a-dodecahedron>
+
+        <!-- Beleuchtung -->
+        <a-light type="ambient" color="#ffffff" intensity="0.5"></a-light>
+        <a-light type="directional" position="5 10 5" intensity="0.8" castShadow="true"></a-light>
+
+        <!-- Kamera -->
+        <a-entity position="0 1.6 0">
+            <a-camera look-controls="magicWindowTrackingEnabled: true; touchEnabled: false">
+            </a-camera>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        const vrButton = document.getElementById('vr-button');
+        const info = document.getElementById('info');
+        const scene = document.querySelector('a-scene');
+
+        // Warte bis A-Frame geladen ist
+        scene.addEventListener('loaded', function() {
+            console.log('Scene loaded');
+        });
+
+        vrButton.addEventListener('click', async function() {
+            // iOS benötigt Berechtigung für Bewegungssensoren
+            if (typeof DeviceMotionEvent !== 'undefined' &&
+                typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission !== 'granted') {
+                        alert('Bitte erlaube den Zugriff auf Bewegungssensoren für VR!');
+                        return;
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            // Verstecke UI
+            vrButton.classList.add('hidden');
+            info.classList.add('hidden');
+
+            // Versuche in den VR-Modus zu wechseln
+            if (scene.is('vr-mode')) {
+                scene.exitVR();
+            } else {
+                scene.enterVR();
+            }
+        });
+
+        // Zeige Button wieder wenn VR-Modus verlassen wird
+        scene.addEventListener('exit-vr', function() {
+            vrButton.classList.remove('hidden');
+            info.classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
