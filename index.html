@@ -97,10 +97,11 @@
         let gazeTarget = null;
         let gazeProgress = 0;
         const gazeTime = 1.5;
-        let cursorRing, cursorProgress, cursorDot;
         let infoVisible = false;
 
-        // 3D Info Panel
+        // HUD Gruppe (Cursor + Info Panel) - wird manuell positioniert
+        let hudGroup;
+        let cursorRing, cursorProgress, cursorDot;
         let infoPanel3D;
         let infoPanelTexture;
         let infoPanelCanvas;
@@ -133,35 +134,77 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        // === 3D INFO PANEL erstellen ===
-        function createInfoPanel3D() {
-            // Canvas für Text
+        // === HUD GRUPPE erstellen (Cursor + Panel) ===
+        function createHUD() {
+            hudGroup = new THREE.Group();
+
+            // === CURSOR ===
+            const cursorGroup = new THREE.Group();
+
+            // Äußerer Ring
+            const ringGeometry = new THREE.RingGeometry(0.015, 0.018, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide,
+                depthTest: false
+            });
+            cursorRing = new THREE.Mesh(ringGeometry, ringMaterial);
+            cursorRing.renderOrder = 999;
+            cursorGroup.add(cursorRing);
+
+            // Progress Ring
+            const progressGeometry = new THREE.RingGeometry(0.015, 0.020, 32, 1, 0, 0);
+            const progressMaterial = new THREE.MeshBasicMaterial({
+                color: 0x4ade80,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide,
+                depthTest: false
+            });
+            cursorProgress = new THREE.Mesh(progressGeometry, progressMaterial);
+            cursorProgress.renderOrder = 999;
+            cursorGroup.add(cursorProgress);
+
+            // Punkt in der Mitte
+            const dotGeometry = new THREE.CircleGeometry(0.003, 16);
+            const dotMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                side: THREE.DoubleSide,
+                depthTest: false
+            });
+            cursorDot = new THREE.Mesh(dotGeometry, dotMaterial);
+            cursorDot.renderOrder = 999;
+            cursorGroup.add(cursorDot);
+
+            cursorGroup.position.set(0, 0, -0.5);
+            hudGroup.add(cursorGroup);
+
+            // === 3D INFO PANEL ===
             infoPanelCanvas = document.createElement('canvas');
             infoPanelCanvas.width = 512;
-            infoPanelCanvas.height = 400;
+            infoPanelCanvas.height = 320;
             infoPanelContext = infoPanelCanvas.getContext('2d');
 
-            // Texture aus Canvas
             infoPanelTexture = new THREE.CanvasTexture(infoPanelCanvas);
             infoPanelTexture.minFilter = THREE.LinearFilter;
 
-            // Material
-            const material = new THREE.MeshBasicMaterial({
+            const panelMaterial = new THREE.MeshBasicMaterial({
                 map: infoPanelTexture,
                 transparent: true,
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
+                depthTest: false
             });
 
-            // Plane Geometry (Seitenverhältnis passend zum Canvas)
-            const geometry = new THREE.PlaneGeometry(0.4, 0.32);
-
-            // Mesh erstellen
-            infoPanel3D = new THREE.Mesh(geometry, material);
-            infoPanel3D.position.set(0, -0.08, -0.5); // Unter dem Cursor, vor der Kamera
+            const panelGeometry = new THREE.PlaneGeometry(0.35, 0.22);
+            infoPanel3D = new THREE.Mesh(panelGeometry, panelMaterial);
+            infoPanel3D.position.set(0, -0.1, -0.5);
+            infoPanel3D.renderOrder = 998;
             infoPanel3D.visible = false;
+            hudGroup.add(infoPanel3D);
 
-            // An Kamera anhängen
-            camera.add(infoPanel3D);
+            scene.add(hudGroup);
         }
 
         // Info Panel Text rendern
@@ -170,142 +213,90 @@
             const w = infoPanelCanvas.width;
             const h = infoPanelCanvas.height;
 
-            // Hintergrund
             ctx.clearRect(0, 0, w, h);
 
-            // Abgerundetes Rechteck
-            const radius = 20;
+            // Hintergrund mit Rahmen
             ctx.beginPath();
-            ctx.roundRect(10, 10, w - 20, h - 20, radius);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.roundRect(5, 5, w - 10, h - 10, 15);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
             ctx.fill();
             ctx.strokeStyle = '#4ade80';
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 3;
             ctx.stroke();
 
-            // Typ (klein, oben)
-            ctx.fillStyle = '#888888';
-            ctx.font = '18px Arial';
+            // Typ (oben)
+            ctx.fillStyle = '#666666';
+            ctx.font = 'bold 16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(info.type.toUpperCase(), w / 2, 50);
+            ctx.fillText(info.type.toUpperCase(), w / 2, 35);
 
             // Name (groß, grün)
             ctx.fillStyle = '#4ade80';
-            ctx.font = 'bold 28px Arial';
-            ctx.fillText(info.name, w / 2, 90);
+            ctx.font = 'bold 26px Arial';
+            ctx.fillText(info.name, w / 2, 70);
 
             // Trennlinie
             ctx.beginPath();
-            ctx.moveTo(40, 110);
-            ctx.lineTo(w - 40, 110);
+            ctx.moveTo(30, 85);
+            ctx.lineTo(w - 30, 85);
             ctx.strokeStyle = '#333333';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1;
             ctx.stroke();
 
-            // Info Grid
+            // Info Zeilen
             ctx.font = '16px Arial';
-            const startY = 145;
-            const lineHeight = 50;
+            const startY = 115;
+            const lineHeight = 38;
 
-            // Hersteller
-            ctx.fillStyle = '#888888';
-            ctx.textAlign = 'left';
-            ctx.fillText('Hersteller', 40, startY);
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'right';
-            ctx.fillText(info.manufacturer, w - 40, startY);
+            const rows = [
+                { label: 'Hersteller', value: info.manufacturer },
+                { label: 'Modell', value: info.model },
+                { label: 'Kategorie', value: info.category },
+                { label: 'Status', value: info.status, isStatus: true }
+            ];
 
-            // Modell
-            ctx.fillStyle = '#888888';
-            ctx.textAlign = 'left';
-            ctx.fillText('Modell', 40, startY + lineHeight);
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'right';
-            ctx.fillText(info.model, w - 40, startY + lineHeight);
+            rows.forEach((row, i) => {
+                const y = startY + i * lineHeight;
 
-            // Kategorie
-            ctx.fillStyle = '#888888';
-            ctx.textAlign = 'left';
-            ctx.fillText('Kategorie', 40, startY + lineHeight * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'right';
-            ctx.fillText(info.category, w - 40, startY + lineHeight * 2);
+                ctx.fillStyle = '#888888';
+                ctx.textAlign = 'left';
+                ctx.fillText(row.label, 30, y);
 
-            // Status
-            ctx.fillStyle = '#888888';
-            ctx.textAlign = 'left';
-            ctx.fillText('Status', 40, startY + lineHeight * 3);
-            ctx.fillStyle = info.status.includes('Aktiv') ? '#4ade80' : '#ffffff';
-            ctx.textAlign = 'right';
-            ctx.fillText(info.status, w - 40, startY + lineHeight * 3);
+                ctx.fillStyle = row.isStatus && row.value.includes('Aktiv') ? '#4ade80' : '#ffffff';
+                ctx.textAlign = 'right';
+                ctx.fillText(row.value, w - 30, y);
+            });
 
-            // Texture aktualisieren
             infoPanelTexture.needsUpdate = true;
-        }
-
-        createInfoPanel3D();
-
-        // === CURSOR erstellen ===
-        function createCursor() {
-            const cursorGroup = new THREE.Group();
-
-            // Äußerer Ring
-            const ringGeometry = new THREE.RingGeometry(0.018, 0.022, 32);
-            const ringMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0.5,
-                side: THREE.DoubleSide
-            });
-            cursorRing = new THREE.Mesh(ringGeometry, ringMaterial);
-            cursorGroup.add(cursorRing);
-
-            // Progress Ring
-            const progressGeometry = new THREE.RingGeometry(0.018, 0.024, 32, 1, 0, 0);
-            const progressMaterial = new THREE.MeshBasicMaterial({
-                color: 0x4ade80,
-                transparent: true,
-                opacity: 0.9,
-                side: THREE.DoubleSide
-            });
-            cursorProgress = new THREE.Mesh(progressGeometry, progressMaterial);
-            cursorGroup.add(cursorProgress);
-
-            // Punkt in der Mitte
-            const dotGeometry = new THREE.CircleGeometry(0.004, 16);
-            const dotMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                side: THREE.DoubleSide
-            });
-            cursorDot = new THREE.Mesh(dotGeometry, dotMaterial);
-            cursorGroup.add(cursorDot);
-
-            cursorGroup.position.set(0, 0, -0.5);
-            camera.add(cursorGroup);
-            scene.add(camera);
-
-            return cursorGroup;
         }
 
         function updateCursorProgress(progress) {
             const angle = progress * Math.PI * 2;
             cursorProgress.geometry.dispose();
-            cursorProgress.geometry = new THREE.RingGeometry(0.018, 0.024, 32, 1, -Math.PI/2, angle);
+            cursorProgress.geometry = new THREE.RingGeometry(0.015, 0.020, 32, 1, -Math.PI/2, angle);
         }
 
         function setCursorHover(isHovering) {
             if (isHovering) {
                 cursorRing.material.color.setHex(0x4ade80);
-                cursorRing.material.opacity = 0.8;
+                cursorRing.material.opacity = 0.9;
                 cursorDot.material.color.setHex(0x4ade80);
             } else {
                 cursorRing.material.color.setHex(0xffffff);
-                cursorRing.material.opacity = 0.5;
+                cursorRing.material.opacity = 0.6;
                 cursorDot.material.color.setHex(0xffffff);
             }
         }
 
-        createCursor();
+        createHUD();
+
+        // HUD Position/Rotation an Kamera anpassen
+        function updateHUD() {
+            // HUD Position = Kamera Position
+            hudGroup.position.copy(camera.position);
+            // HUD Rotation = Kamera Rotation
+            hudGroup.quaternion.copy(camera.quaternion);
+        }
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -425,10 +416,10 @@
             return post;
         }
 
-        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2, "Pfosten Hinten-Links"));
-        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2, "Pfosten Hinten-Rechts"));
-        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2, "Pfosten Vorne-Links"));
-        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2, "Pfosten Vorne-Rechts"));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, -cellDepth/2 + frameThickness/2, "Pfosten H-L"));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, -cellDepth/2 + frameThickness/2, "Pfosten H-R"));
+        cellGroup.add(createFramePost(-cellWidth/2 + frameThickness/2, cellDepth/2 - frameThickness/2, "Pfosten V-L"));
+        cellGroup.add(createFramePost(cellWidth/2 - frameThickness/2, cellDepth/2 - frameThickness/2, "Pfosten V-R"));
 
         // === FRAME HORIZONTALS ===
         function createHorizontalFrame(x, y, z, width, depth) {
@@ -465,10 +456,10 @@
         const glassHeight = cellHeight - 0.8;
         const glassY = glassHeight / 2 + 1.0;
 
-        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0, "Frontscheibe Links"));
-        cellGroup.add(createGlassPanel(cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0, "Frontscheibe Rechts"));
-        cellGroup.add(createGlassPanel(-cellWidth/2 + 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2, "Seitenscheibe Links"));
-        cellGroup.add(createGlassPanel(cellWidth/2 - 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2, "Seitenscheibe Rechts"));
+        cellGroup.add(createGlassPanel(-cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0, "Front-Glas L"));
+        cellGroup.add(createGlassPanel(cellWidth/3, glassY, cellDepth/2 - 0.02, cellWidth/3 - 0.1, glassHeight, 0, "Front-Glas R"));
+        cellGroup.add(createGlassPanel(-cellWidth/2 + 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2, "Seiten-Glas L"));
+        cellGroup.add(createGlassPanel(cellWidth/2 - 0.02, glassY, 0, cellDepth - 0.1, glassHeight, Math.PI / 2, "Seiten-Glas R"));
 
         // === LED STRIPS ===
         function createLedStrip(x, y, z, length, rotationY, name) {
@@ -548,7 +539,7 @@
             manufacturer: "KUKA",
             model: "KR 6 R900",
             category: "Handling",
-            status: "Aktiv - Produktion"
+            status: "Aktiv"
         });
         robot1.rotation.y = Math.PI / 4;
         cellGroup.add(robot1);
@@ -559,7 +550,7 @@
             manufacturer: "KUKA",
             model: "KR 6 R900",
             category: "Montage",
-            status: "Aktiv - Produktion"
+            status: "Aktiv"
         });
         robot2.rotation.y = -Math.PI / 4;
         cellGroup.add(robot2);
@@ -570,7 +561,7 @@
             manufacturer: "ABB",
             model: "IRB 1200",
             category: "Zuführung",
-            status: "Aktiv - Produktion"
+            status: "Aktiv"
         });
         robot3.rotation.y = Math.PI / 2;
         robot3.scale.set(0.8, 0.8, 0.8);
@@ -584,7 +575,7 @@
             name: "Förderband",
             type: "Transport",
             manufacturer: "Bosch Rexroth",
-            model: "VarioFlow plus",
+            model: "VarioFlow",
             category: "Transport",
             status: "Aktiv"
         });
@@ -594,8 +585,8 @@
         const box1 = new THREE.Mesh(box1Geom, equipmentMaterial);
         box1.position.set(-2, 0.7, 1.5);
         makeInteractive(box1, {
-            name: "Steuerungsschrank",
-            type: "Schaltschrank",
+            name: "Schaltschrank",
+            type: "Steuerung",
             manufacturer: "Rittal",
             model: "AX Kompakt",
             category: "Elektrik",
@@ -607,7 +598,7 @@
         const box2 = new THREE.Mesh(box2Geom, equipmentMaterial);
         box2.position.set(2.2, 0.8, 1.2);
         makeInteractive(box2, {
-            name: "Pneumatik-Einheit",
+            name: "Pneumatik",
             type: "Versorgung",
             manufacturer: "Festo",
             model: "MSB6-AGD",
@@ -621,10 +612,10 @@
         rightEquip.position.set(2.3, 1.15, -0.8);
         makeInteractive(rightEquip, {
             name: "Prüfstation",
-            type: "Qualitätskontrolle",
+            type: "Inspektion",
             manufacturer: "Keyence",
             model: "CV-X Series",
-            category: "Inspektion",
+            category: "Qualität",
             status: "Aktiv"
         });
         cellGroup.add(rightEquip);
@@ -636,10 +627,10 @@
             magazine.position.set(-2.5, 1, -1.5 + i * 0.5);
             makeInteractive(magazine, {
                 name: `Magazin ${i + 1}`,
-                type: "Bauteilmagazin",
+                type: "Zuführung",
                 manufacturer: "Schunk",
                 model: "VERO-S",
-                category: "Zuführung",
+                category: "Lager",
                 status: i === 0 ? "Voll" : i === 1 ? "Halb voll" : "Leer"
             });
             cellGroup.add(magazine);
@@ -689,10 +680,6 @@
             constructor(renderer) {
                 this.renderer = renderer;
                 this.eyeSeparation = 0.064;
-                this.cameras = {
-                    left: new THREE.PerspectiveCamera(),
-                    right: new THREE.PerspectiveCamera()
-                };
             }
 
             setSize(width, height) {
@@ -703,35 +690,38 @@
                 const size = new THREE.Vector2();
                 this.renderer.getSize(size);
 
-                this.cameras.left.copy(camera);
-                this.cameras.right.copy(camera);
+                // Speichere original Kamera-Einstellungen
+                const originalAspect = camera.aspect;
 
-                this.cameras.left.aspect = size.x / 2 / size.y;
-                this.cameras.right.aspect = size.x / 2 / size.y;
+                // Aspect für halbe Breite
+                camera.aspect = (size.x / 2) / size.y;
+                camera.updateProjectionMatrix();
 
-                this.cameras.left.updateProjectionMatrix();
-                this.cameras.right.updateProjectionMatrix();
-
+                // Offset für Augen
                 const offset = new THREE.Vector3(this.eyeSeparation / 2, 0, 0);
                 offset.applyQuaternion(camera.quaternion);
 
-                this.cameras.left.position.copy(camera.position).sub(offset);
-                this.cameras.right.position.copy(camera.position).add(offset);
-
-                this.cameras.left.quaternion.copy(camera.quaternion);
-                this.cameras.right.quaternion.copy(camera.quaternion);
-
                 this.renderer.setScissorTest(true);
 
+                // Linkes Auge
+                camera.position.sub(offset);
                 this.renderer.setScissor(0, 0, size.x / 2, size.y);
                 this.renderer.setViewport(0, 0, size.x / 2, size.y);
-                this.renderer.render(scene, this.cameras.left);
+                this.renderer.render(scene, camera);
+                camera.position.add(offset);
 
+                // Rechtes Auge
+                camera.position.add(offset);
                 this.renderer.setScissor(size.x / 2, 0, size.x / 2, size.y);
                 this.renderer.setViewport(size.x / 2, 0, size.x / 2, size.y);
-                this.renderer.render(scene, this.cameras.right);
+                this.renderer.render(scene, camera);
+                camera.position.sub(offset);
 
                 this.renderer.setScissorTest(false);
+
+                // Stelle original Aspect wieder her
+                camera.aspect = originalAspect;
+                camera.updateProjectionMatrix();
             }
         }
 
@@ -881,6 +871,9 @@
             // Kamera Update
             updateCameraRotation();
 
+            // HUD folgt der Kamera (manuell, nicht als Kind)
+            updateHUD();
+
             // Gaze Update
             if (vrMode) {
                 updateGaze(deltaTime);
@@ -904,7 +897,7 @@
         });
 
         animate();
-        console.log('CELLIOS VR with 3D Info Panel initialized');
+        console.log('CELLIOS VR initialized');
     </script>
 </body>
 </html>
