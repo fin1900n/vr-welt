@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR Hand Tracking</title>
+    <title>AR Hand Tracking VR</title>
 
     <style>
         * {
@@ -20,26 +20,112 @@
             height: 100vh;
         }
 
-        /* VIDEO - Vollbild Hintergrund */
-        #video {
+        /* STEREO CONTAINER */
+        #stereo-container {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            object-fit: cover;
-            z-index: 1;
+            display: flex;
         }
 
-        /* Canvas für Hand-Tracking */
-        #canvas {
-            position: fixed;
+        .eye-view {
+            width: 50vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            border-right: 2px solid #000;
+        }
+
+        .eye-view:last-child {
+            border-right: none;
+            border-left: 2px solid #000;
+        }
+
+        /* VIDEO in jeder Hälfte */
+        .eye-view video {
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 2;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Canvas für Hand-Overlay */
+        .eye-view canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
+        }
+
+        /* Objekte in jeder Hälfte */
+        .eye-objects {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .object3d {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(255,255,255,0.4);
+        }
+
+        .obj1 { background: #ff6b6b; }
+        .obj2 { background: #4ecdc4; }
+        .obj3 { background: #ffe66d; }
+
+        /* Cursor in jeder Hälfte */
+        .cursor {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border: 3px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px white;
+        }
+
+        .cursor.pinch {
+            background: rgba(0, 255, 0, 0.6);
+            transform: translate(-50%, -50%) scale(0.7);
+        }
+
+        /* Trennlinie in der Mitte */
+        #divider {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            width: 4px;
+            height: 100vh;
+            background: #000;
+            z-index: 1000;
+        }
+
+        /* Status oben Mitte */
+        #status {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 15px;
+            z-index: 1001;
+            font-size: 12px;
         }
 
         /* UI Elemente */
@@ -49,12 +135,12 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 100;
+            z-index: 2000;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: rgba(0,0,0,0.9);
+            background: #000;
         }
 
         #ui.hidden {
@@ -63,14 +149,16 @@
 
         #ui h1 {
             color: white;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            font-size: 22px;
         }
 
         #ui p {
             color: #888;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             text-align: center;
-            padding: 0 20px;
+            padding: 0 30px;
+            font-size: 14px;
         }
 
         #startBtn {
@@ -83,115 +171,157 @@
             cursor: pointer;
         }
 
-        #status {
+        /* Vollbild-Hinweis */
+        #fullscreen-hint {
             position: fixed;
-            top: 20px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            z-index: 50;
-            font-size: 14px;
-        }
-
-        /* 3D Objekte (einfache divs) */
-        .object3d {
-            position: fixed;
-            width: 60px;
-            height: 60px;
-            border-radius: 10px;
-            z-index: 10;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 20px rgba(255,255,255,0.3);
-        }
-
-        #obj1 { background: #ff6b6b; top: 30%; left: 30%; }
-        #obj2 { background: #4ecdc4; top: 30%; left: 50%; }
-        #obj3 { background: #ffe66d; top: 30%; left: 70%; }
-
-        /* Hand Cursor */
-        #cursor {
-            position: fixed;
-            width: 30px;
-            height: 30px;
-            border: 3px solid white;
-            border-radius: 50%;
-            z-index: 20;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            box-shadow: 0 0 15px white;
-            transition: transform 0.05s;
-        }
-
-        #cursor.pinch {
-            background: rgba(0, 255, 0, 0.5);
-            transform: translate(-50%, -50%) scale(0.7);
+            color: #666;
+            font-size: 10px;
+            z-index: 1001;
         }
     </style>
 </head>
 <body>
     <!-- Start UI -->
     <div id="ui">
-        <h1>AR Hand Tracking</h1>
-        <p>Halte deine Hand vor die Rückkamera.<br>Pinch-Geste (Daumen+Zeigefinger) zum Greifen.</p>
-        <button id="startBtn">Kamera starten</button>
+        <h1>VR Hand Tracking</h1>
+        <p>Halte deine Hand vor die Kamera.<br>Pinch-Geste zum Greifen.<br>Dann Handy in VR-Brille einsetzen.</p>
+        <button id="startBtn">Starten</button>
     </div>
 
-    <!-- Video (Kamerabild) -->
-    <video id="video" playsinline muted autoplay></video>
+    <!-- Stereo View (Links + Rechts) -->
+    <div id="stereo-container" style="display:none;">
+        <!-- Linkes Auge -->
+        <div class="eye-view" id="left-eye">
+            <video id="video-left" playsinline muted></video>
+            <canvas id="canvas-left"></canvas>
+            <div class="eye-objects" id="objects-left"></div>
+            <div class="cursor" id="cursor-left" style="display:none;"></div>
+        </div>
 
-    <!-- Canvas für Hand-Overlay -->
-    <canvas id="canvas"></canvas>
+        <!-- Rechtes Auge -->
+        <div class="eye-view" id="right-eye">
+            <video id="video-right" playsinline muted></video>
+            <canvas id="canvas-right"></canvas>
+            <div class="eye-objects" id="objects-right"></div>
+            <div class="cursor" id="cursor-right" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- Trennlinie -->
+    <div id="divider" style="display:none;"></div>
 
     <!-- Status -->
     <div id="status" style="display:none;">Suche Hand...</div>
 
-    <!-- Cursor -->
-    <div id="cursor" style="display:none;"></div>
-
-    <!-- 3D Objekte -->
-    <div id="obj1" class="object3d" style="display:none;"></div>
-    <div id="obj2" class="object3d" style="display:none;"></div>
-    <div id="obj3" class="object3d" style="display:none;"></div>
+    <!-- Vollbild Hinweis -->
+    <div id="fullscreen-hint" style="display:none;">Für VR: Handy quer halten</div>
 
     <!-- MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
     <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        // Elemente
         const ui = document.getElementById('ui');
+        const stereoContainer = document.getElementById('stereo-container');
+        const divider = document.getElementById('divider');
         const status = document.getElementById('status');
-        const cursor = document.getElementById('cursor');
         const startBtn = document.getElementById('startBtn');
-        const objects = [
-            document.getElementById('obj1'),
-            document.getElementById('obj2'),
-            document.getElementById('obj3')
-        ];
+        const fullscreenHint = document.getElementById('fullscreen-hint');
 
+        // Video Elemente (beide zeigen den gleichen Stream)
+        const videoLeft = document.getElementById('video-left');
+        const videoRight = document.getElementById('video-right');
+
+        // Canvas
+        const canvasLeft = document.getElementById('canvas-left');
+        const canvasRight = document.getElementById('canvas-right');
+        const ctxLeft = canvasLeft.getContext('2d');
+        const ctxRight = canvasRight.getContext('2d');
+
+        // Cursor
+        const cursorLeft = document.getElementById('cursor-left');
+        const cursorRight = document.getElementById('cursor-right');
+
+        // Objekt-Container
+        const objectsLeft = document.getElementById('objects-left');
+        const objectsRight = document.getElementById('objects-right');
+
+        // State
         let hands;
-        let grabbedObject = null;
+        let stream;
+        let grabbedIndex = -1;
         let lastPinch = false;
 
-        // Start Button
+        // Objekte Positionen (in Prozent)
+        const objectsData = [
+            { x: 30, y: 35, class: 'obj1' },
+            { x: 50, y: 35, class: 'obj2' },
+            { x: 70, y: 35, class: 'obj3' }
+        ];
+
+        // Objekte erstellen
+        function createObjects() {
+            [objectsLeft, objectsRight].forEach(container => {
+                container.innerHTML = '';
+                objectsData.forEach((obj, i) => {
+                    const div = document.createElement('div');
+                    div.className = `object3d ${obj.class}`;
+                    div.id = `obj-${container.id}-${i}`;
+                    div.style.left = obj.x + '%';
+                    div.style.top = obj.y + '%';
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        // Objekte synchronisieren (beide Seiten gleich)
+        function updateObjects() {
+            objectsData.forEach((obj, i) => {
+                const leftObj = document.getElementById(`obj-objects-left-${i}`);
+                const rightObj = document.getElementById(`obj-objects-right-${i}`);
+                if (leftObj && rightObj) {
+                    leftObj.style.left = obj.x + '%';
+                    leftObj.style.top = obj.y + '%';
+                    rightObj.style.left = obj.x + '%';
+                    rightObj.style.top = obj.y + '%';
+
+                    // Highlight wenn gegriffen
+                    const shadow = grabbedIndex === i ? '0 0 25px white' : '0 0 15px rgba(255,255,255,0.4)';
+                    leftObj.style.boxShadow = shadow;
+                    rightObj.style.boxShadow = shadow;
+                }
+            });
+        }
+
+        // Start
         startBtn.addEventListener('click', async () => {
             startBtn.textContent = 'Lädt...';
             startBtn.disabled = true;
 
             try {
+                // Vollbild versuchen
+                try {
+                    await document.documentElement.requestFullscreen();
+                    screen.orientation.lock('landscape').catch(() => {});
+                } catch (e) {}
+
                 await startCamera();
                 await startHandTracking();
 
-                // UI verstecken, Elemente zeigen
+                // UI umschalten
                 ui.classList.add('hidden');
+                stereoContainer.style.display = 'flex';
+                divider.style.display = 'block';
                 status.style.display = 'block';
-                cursor.style.display = 'block';
-                objects.forEach(o => o.style.display = 'block');
+                fullscreenHint.style.display = 'block';
+                cursorLeft.style.display = 'block';
+                cursorRight.style.display = 'block';
+
+                createObjects();
+                resizeCanvases();
 
             } catch (err) {
                 alert('Fehler: ' + err.message);
@@ -200,33 +330,39 @@
             }
         });
 
+        // Canvas Größe anpassen
+        function resizeCanvases() {
+            const w = window.innerWidth / 2;
+            const h = window.innerHeight;
+            canvasLeft.width = w;
+            canvasLeft.height = h;
+            canvasRight.width = w;
+            canvasRight.height = h;
+        }
+        window.addEventListener('resize', resizeCanvases);
+
         // Kamera starten
         async function startCamera() {
-            // Versuche Rückkamera
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' },
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
                     audio: false
                 });
-                video.srcObject = stream;
-                await video.play();
-                console.log('Rückkamera gestartet');
             } catch (e) {
-                console.log('Rückkamera failed, versuche andere:', e);
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: false
-                });
-                video.srcObject = stream;
-                await video.play();
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             }
 
-            // Canvas Größe
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            // Beide Videos mit gleichem Stream
+            videoLeft.srcObject = stream;
+            videoRight.srcObject = stream;
+
+            await Promise.all([
+                videoLeft.play(),
+                videoRight.play()
+            ]);
         }
 
-        // Hand Tracking starten
+        // Hand Tracking
         async function startHandTracking() {
             hands = new Hands({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -241,37 +377,45 @@
 
             hands.onResults(onResults);
 
-            // Kamera-Loop
+            // Detection Loop
             async function detect() {
-                await hands.send({ image: video });
+                if (videoLeft.readyState >= 2) {
+                    await hands.send({ image: videoLeft });
+                }
                 requestAnimationFrame(detect);
             }
             detect();
         }
 
-        // Hand Ergebnisse
+        // Ergebnisse verarbeiten
         function onResults(results) {
             // Canvas leeren
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctxLeft.clearRect(0, 0, canvasLeft.width, canvasLeft.height);
+            ctxRight.clearRect(0, 0, canvasRight.width, canvasRight.height);
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
 
                 status.textContent = 'Hand erkannt!';
-                status.style.background = 'rgba(0,200,0,0.7)';
+                status.style.background = 'rgba(0,150,0,0.8)';
 
-                // Hand zeichnen
-                drawHand(landmarks);
+                // Hand auf beiden Canvases zeichnen
+                drawHand(ctxLeft, canvasLeft, landmarks);
+                drawHand(ctxRight, canvasRight, landmarks);
 
                 // Zeigefinger + Daumen
                 const indexTip = landmarks[8];
                 const thumbTip = landmarks[4];
 
-                // Cursor Position
-                const x = indexTip.x * window.innerWidth;
-                const y = indexTip.y * window.innerHeight;
-                cursor.style.left = x + 'px';
-                cursor.style.top = y + 'px';
+                // Cursor Position (in Prozent)
+                const xPercent = indexTip.x * 100;
+                const yPercent = indexTip.y * 100;
+
+                // Cursor auf beiden Seiten
+                cursorLeft.style.left = xPercent + '%';
+                cursorLeft.style.top = yPercent + '%';
+                cursorRight.style.left = xPercent + '%';
+                cursorRight.style.top = yPercent + '%';
 
                 // Pinch erkennen
                 const dist = Math.hypot(
@@ -281,49 +425,45 @@
                 );
                 const isPinch = dist < 0.06;
 
-                if (isPinch) {
-                    cursor.classList.add('pinch');
-                } else {
-                    cursor.classList.remove('pinch');
-                }
+                // Cursor Stil
+                [cursorLeft, cursorRight].forEach(c => {
+                    c.classList.toggle('pinch', isPinch);
+                });
 
                 // Objekt greifen
-                if (isPinch && !lastPinch && !grabbedObject) {
-                    objects.forEach(obj => {
-                        const rect = obj.getBoundingClientRect();
-                        const objX = rect.left + rect.width / 2;
-                        const objY = rect.top + rect.height / 2;
-                        const distance = Math.hypot(x - objX, y - objY);
-
-                        if (distance < 80) {
-                            grabbedObject = obj;
-                            obj.style.boxShadow = '0 0 30px white';
+                if (isPinch && !lastPinch && grabbedIndex === -1) {
+                    objectsData.forEach((obj, i) => {
+                        const dx = xPercent - obj.x;
+                        const dy = yPercent - obj.y;
+                        const distance = Math.hypot(dx, dy);
+                        if (distance < 15) {
+                            grabbedIndex = i;
                         }
                     });
                 }
 
                 // Objekt loslassen
-                if (!isPinch && lastPinch && grabbedObject) {
-                    grabbedObject.style.boxShadow = '0 0 20px rgba(255,255,255,0.3)';
-                    grabbedObject = null;
+                if (!isPinch && lastPinch && grabbedIndex !== -1) {
+                    grabbedIndex = -1;
                 }
 
                 // Objekt bewegen
-                if (grabbedObject && isPinch) {
-                    grabbedObject.style.left = x + 'px';
-                    grabbedObject.style.top = y + 'px';
+                if (grabbedIndex !== -1 && isPinch) {
+                    objectsData[grabbedIndex].x = xPercent;
+                    objectsData[grabbedIndex].y = yPercent;
                 }
 
+                updateObjects();
                 lastPinch = isPinch;
 
             } else {
                 status.textContent = 'Suche Hand...';
-                status.style.background = 'rgba(0,0,0,0.7)';
+                status.style.background = 'rgba(0,0,0,0.8)';
             }
         }
 
         // Hand zeichnen
-        function drawHand(landmarks) {
+        function drawHand(ctx, canvas, landmarks) {
             const w = canvas.width;
             const h = canvas.height;
 
@@ -337,7 +477,7 @@
                 [5,9],[9,13],[13,17]
             ];
 
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
             ctx.lineWidth = 2;
 
             connections.forEach(([i, j]) => {
@@ -348,10 +488,10 @@
             });
 
             // Fingerspitzen
+            ctx.fillStyle = 'white';
             [4, 8, 12, 16, 20].forEach(i => {
                 ctx.beginPath();
-                ctx.arc(landmarks[i].x * w, landmarks[i].y * h, 8, 0, Math.PI * 2);
-                ctx.fillStyle = 'white';
+                ctx.arc(landmarks[i].x * w, landmarks[i].y * h, 6, 0, Math.PI * 2);
                 ctx.fill();
             });
         }
