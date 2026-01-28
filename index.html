@@ -84,11 +84,6 @@
         }
 
         #start-btn {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 2000;
             padding: 20px 40px;
             font-size: 20px;
             background: #00ff00;
@@ -97,14 +92,50 @@
             cursor: pointer;
             color: #000;
             font-weight: bold;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        #start-btn:hover {
+        #start-btn:hover, #start-btn:active {
             background: #00cc00;
+            transform: scale(1.05);
         }
 
         .hidden {
             display: none !important;
+            pointer-events: none !important;
+        }
+
+        /* Startscreen über alles */
+        #start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #start-screen.hidden {
+            display: none !important;
+        }
+
+        #start-screen h1 {
+            color: #00ff00;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #start-screen p {
+            color: #aaa;
+            margin-bottom: 30px;
+            text-align: center;
+            padding: 0 20px;
         }
 
         #instructions {
@@ -121,8 +152,12 @@
     </style>
 </head>
 <body>
-    <!-- Start Button -->
-    <button id="start-btn">Kamera & VR Starten</button>
+    <!-- Start Screen (überdeckt alles bis zum Start) -->
+    <div id="start-screen">
+        <h1>VR Hand Tracking</h1>
+        <p>Steuere VR-Objekte mit deinen Händen</p>
+        <button id="start-btn">Kamera & VR Starten</button>
+    </div>
 
     <!-- Info Panel -->
     <div id="info-panel" class="hidden">
