@@ -1,97 +1,96 @@
 /**
- * VR Hand Tracking System
- * Kombiniert A-Frame VR mit MediaPipe Handerkennung
+ * AR Hand Tracking - Vision Pro Style
+ * Passthrough + Hand Recognition + Virtual Objects
  */
 
-// Globale Variablen
+// State
 let hands = null;
 let camera = null;
 let isRunning = false;
 let grabbedObject = null;
-let hoveredObject = null;
-let lastHandPosition = { x: 0.5, y: 0.5, z: 0 };
+let lastPinchState = false;
 
-const config = {
-    handSmoothingFactor: 0.3,
-    grabThreshold: 0.08,
-    cursorDepth: -2
-};
+// Pinch detection
+const PINCH_THRESHOLD = 0.05;
 
-// Start-Funktion (wird von Button aufgerufen)
+// DOM Elements (werden nach Start gesetzt)
+let videoElement, canvasElement, canvasCtx;
+let fingerCursor, statusDot, statusText, gestureIndicator, gestureText;
+let cursor3D;
+
 function startApp() {
-    console.log('Button geklickt!');
+    console.log('Starting AR...');
 
     const btn = document.getElementById('start-btn');
-    btn.textContent = 'Wird geladen...';
+    btn.textContent = 'Lädt...';
     btn.disabled = true;
 
-    // Kurze Verzögerung damit UI sich aktualisiert
-    setTimeout(() => {
-        initializeApp();
-    }, 100);
+    setTimeout(initializeApp, 100);
 }
 
 async function initializeApp() {
     try {
-        console.log('Initialisiere App...');
+        // DOM Elemente holen
+        videoElement = document.getElementById('camera-feed');
+        canvasElement = document.getElementById('hand-canvas');
+        canvasCtx = canvasElement.getContext('2d');
+        fingerCursor = document.getElementById('finger-cursor');
+        statusDot = document.getElementById('status-dot');
+        statusText = document.getElementById('status-text');
+        gestureIndicator = document.getElementById('gesture-indicator');
+        gestureText = document.getElementById('gesture-text');
 
-        // MediaPipe Hands initialisieren
-        await initializeHandTracking();
+        // Hand Tracking initialisieren
+        await initHandTracking();
 
-        // UI aktualisieren
-        document.getElementById('start-screen').style.display = 'none';
+        // UI anzeigen
+        document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('camera-container').classList.remove('hidden');
-        document.getElementById('info-panel').classList.remove('hidden');
-        document.getElementById('instructions').classList.remove('hidden');
+        document.getElementById('hand-canvas').classList.remove('hidden');
+        document.getElementById('finger-cursor').classList.remove('hidden');
+        document.getElementById('status-bar').classList.remove('hidden');
+        document.getElementById('gesture-indicator').classList.remove('hidden');
         document.getElementById('vr-scene').classList.remove('hidden');
+
+        // 3D Cursor Referenz
+        cursor3D = document.getElementById('cursor-3d');
 
         // Kamera starten
         await startCamera();
 
         isRunning = true;
-        updateStatus('Aktiv - Zeige deine Hand!');
-        console.log('App erfolgreich gestartet!');
+        console.log('AR Ready!');
 
     } catch (error) {
-        console.error('Fehler:', error);
-        alert('Fehler: ' + error.message + '\n\nBitte Kamera-Zugriff erlauben!');
+        console.error('Error:', error);
+        alert('Fehler: ' + error.message);
 
         const btn = document.getElementById('start-btn');
-        btn.textContent = 'Erneut versuchen';
+        btn.textContent = 'Nochmal';
         btn.disabled = false;
     }
 }
 
-async function initializeHandTracking() {
-    console.log('Initialisiere Hand-Tracking...');
-
+async function initHandTracking() {
     hands = new Hands({
-        locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
 
     hands.setOptions({
-        maxNumHands: 2,
+        maxNumHands: 1,
         modelComplexity: 1,
         minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.5
+        minTrackingConfidence: 0.6
     });
 
     hands.onResults(onHandResults);
-
-    console.log('Hand-Tracking initialisiert!');
 }
 
 async function startCamera() {
-    console.log('Starte Kamera...');
-
-    const videoElement = document.getElementById('camera-feed');
-    const canvasElement = document.getElementById('hand-canvas');
-
+    // Rückkamera (Außenkamera) - Passthrough wie Vision Pro
     const constraints = {
         video: {
-            facingMode: { ideal: 'environment' },  // Rückkamera
+            facingMode: { ideal: 'environment' },
             width: { ideal: 1280 },
             height: { ideal: 720 }
         }
@@ -107,11 +106,11 @@ async function startCamera() {
         };
     });
 
-    // Canvas Größe anpassen
+    // Canvas an Video anpassen
     canvasElement.width = videoElement.videoWidth;
     canvasElement.height = videoElement.videoHeight;
 
-    // MediaPipe Kamera starten
+    // MediaPipe Camera
     camera = new Camera(videoElement, {
         onFrame: async () => {
             if (hands && isRunning) {
@@ -123,244 +122,219 @@ async function startCamera() {
     });
 
     await camera.start();
-    console.log('Kamera gestartet!');
 }
 
 function onHandResults(results) {
-    const canvasElement = document.getElementById('hand-canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-
-    canvasCtx.save();
+    // Canvas leeren
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-            const landmarks = results.multiHandLandmarks[i];
-            const handedness = results.multiHandedness[i];
+        const landmarks = results.multiHandLandmarks[0];
 
-            drawHand(canvasCtx, canvasElement, landmarks);
-            const gesture = detectGesture(landmarks);
-            updateVRCursor(landmarks, gesture);
-            updateHandInfo(handedness, gesture);
+        // Hand erkannt
+        statusDot.classList.add('active');
+        statusText.textContent = 'Hand erkannt';
+
+        // Hand zeichnen (dezent)
+        drawHandSkeleton(landmarks);
+
+        // Zeigefinger-Spitze tracken
+        const indexTip = landmarks[8];
+        const thumbTip = landmarks[4];
+
+        // Pinch erkennen (Daumen + Zeigefinger zusammen)
+        const pinchDistance = getDistance(indexTip, thumbTip);
+        const isPinching = pinchDistance < PINCH_THRESHOLD;
+
+        // Finger-Cursor Position (nicht gespiegelt für Rückkamera)
+        const screenX = indexTip.x * window.innerWidth;
+        const screenY = indexTip.y * window.innerHeight;
+
+        // Cursor bewegen
+        fingerCursor.style.left = screenX + 'px';
+        fingerCursor.style.top = screenY + 'px';
+
+        // Pinch visuell anzeigen
+        if (isPinching) {
+            fingerCursor.classList.add('pinch');
+        } else {
+            fingerCursor.classList.remove('pinch');
         }
-    } else {
-        document.getElementById('gesture-display').textContent = 'Geste: Keine Hand erkannt';
-        hideCursor();
-    }
 
-    canvasCtx.restore();
+        // 3D Interaktion
+        handle3DInteraction(indexTip, isPinching);
+
+        // Gesten-Anzeige
+        updateGestureDisplay(isPinching);
+
+        lastPinchState = isPinching;
+
+    } else {
+        // Keine Hand
+        statusDot.classList.remove('active');
+        statusText.textContent = 'Suche Hand...';
+        fingerCursor.style.left = '-100px';
+        gestureIndicator.classList.remove('visible');
+
+        // Objekt loslassen wenn Hand weg
+        if (grabbedObject) {
+            releaseObject();
+        }
+    }
 }
 
-function drawHand(ctx, canvas, landmarks) {
+function drawHandSkeleton(landmarks) {
+    const w = canvasElement.width;
+    const h = canvasElement.height;
+
+    // Verbindungen (dezent)
     const connections = [
+        // Daumen
         [0, 1], [1, 2], [2, 3], [3, 4],
+        // Zeigefinger
         [0, 5], [5, 6], [6, 7], [7, 8],
+        // Mittelfinger
         [0, 9], [9, 10], [10, 11], [11, 12],
+        // Ringfinger
         [0, 13], [13, 14], [14, 15], [15, 16],
+        // Kleiner Finger
         [0, 17], [17, 18], [18, 19], [19, 20],
+        // Handfläche
         [5, 9], [9, 13], [13, 17]
     ];
 
-    ctx.strokeStyle = '#00FF00';
-    ctx.lineWidth = 3;
+    // Linien zeichnen
+    canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    canvasCtx.lineWidth = 2;
 
-    for (const [start, end] of connections) {
-        ctx.beginPath();
-        ctx.moveTo(landmarks[start].x * canvas.width, landmarks[start].y * canvas.height);
-        ctx.lineTo(landmarks[end].x * canvas.width, landmarks[end].y * canvas.height);
-        ctx.stroke();
+    for (const [i, j] of connections) {
+        const p1 = landmarks[i];
+        const p2 = landmarks[j];
+
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(p1.x * w, p1.y * h);
+        canvasCtx.lineTo(p2.x * w, p2.y * h);
+        canvasCtx.stroke();
     }
 
-    for (const landmark of landmarks) {
-        ctx.fillStyle = '#FF0000';
-        ctx.beginPath();
-        ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 5, 0, 2 * Math.PI);
-        ctx.fill();
+    // Fingerspitzen hervorheben
+    const fingertips = [4, 8, 12, 16, 20];
+
+    for (const i of fingertips) {
+        const p = landmarks[i];
+        const x = p.x * w;
+        const y = p.y * h;
+
+        // Glow Effekt
+        const gradient = canvasCtx.createRadialGradient(x, y, 0, x, y, 15);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        canvasCtx.fillStyle = gradient;
+        canvasCtx.beginPath();
+        canvasCtx.arc(x, y, 15, 0, Math.PI * 2);
+        canvasCtx.fill();
+
+        // Punkt
+        canvasCtx.fillStyle = 'white';
+        canvasCtx.beginPath();
+        canvasCtx.arc(x, y, 4, 0, Math.PI * 2);
+        canvasCtx.fill();
     }
 }
 
-function detectGesture(landmarks) {
-    const thumbTip = landmarks[4];
-    const indexTip = landmarks[8];
-    const middleTip = landmarks[12];
-    const ringTip = landmarks[16];
-    const pinkyTip = landmarks[20];
-
-    const indexMCP = landmarks[5];
-    const middleMCP = landmarks[9];
-    const ringMCP = landmarks[13];
-    const pinkyMCP = landmarks[17];
-
-    const indexExtended = indexTip.y < indexMCP.y;
-    const middleExtended = middleTip.y < middleMCP.y;
-    const ringExtended = ringTip.y < ringMCP.y;
-    const pinkyExtended = pinkyTip.y < pinkyMCP.y;
-
-    const thumbIndexDist = Math.sqrt(
-        Math.pow(thumbTip.x - indexTip.x, 2) +
-        Math.pow(thumbTip.y - indexTip.y, 2) +
-        Math.pow(thumbTip.z - indexTip.z, 2)
+function getDistance(p1, p2) {
+    return Math.sqrt(
+        Math.pow(p1.x - p2.x, 2) +
+        Math.pow(p1.y - p2.y, 2) +
+        Math.pow(p1.z - p2.z, 2)
     );
-
-    if (thumbIndexDist < config.grabThreshold) return 'grab';
-    if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) return 'point';
-    if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) return 'peace';
-    if (indexExtended && middleExtended && ringExtended && pinkyExtended) return 'open';
-    if (!indexExtended && !middleExtended && !ringExtended && !pinkyExtended) return 'fist';
-
-    return 'unknown';
 }
 
-function lerp(start, end, factor) {
-    return start + (end - start) * factor;
-}
+function handle3DInteraction(indexTip, isPinching) {
+    // 2D Position zu 3D umrechnen
+    // Nicht gespiegelt für Rückkamera
+    const x3d = (indexTip.x - 0.5) * 2;  // -1 bis 1
+    const y3d = (0.5 - indexTip.y) * 1.5; // -0.75 bis 0.75
+    const z3d = -1.5; // Fixe Tiefe
 
-function updateVRCursor(landmarks, gesture) {
-    const palm = landmarks[9];
-    const cursorSphere = document.getElementById('cursor-sphere');
-    const cursorLabel = document.getElementById('cursor-label');
+    // 3D Cursor bewegen
+    if (cursor3D) {
+        cursor3D.setAttribute('position', `${x3d} ${y3d} ${z3d}`);
 
-    const smoothX = lerp(lastHandPosition.x, palm.x, config.handSmoothingFactor);
-    const smoothY = lerp(lastHandPosition.y, palm.y, config.handSmoothingFactor);
-    lastHandPosition = { x: smoothX, y: smoothY, z: palm.z };
-
-    const vrX = (smoothX - 0.5) * 4;  // Nicht gespiegelt für Rückkamera
-    const vrY = (1 - smoothY) * 2.5 + 0.5;
-    const vrZ = config.cursorDepth;
-
-    cursorSphere.setAttribute('position', `${vrX} ${vrY} ${vrZ}`);
-    cursorSphere.setAttribute('visible', 'true');
-
-    let cursorColor = '#00ff00';
-    let cursorScale = '1 1 1';
-
-    switch (gesture) {
-        case 'grab':
-        case 'fist':
-            cursorColor = '#ff0000';
-            cursorScale = '1.5 1.5 1.5';
-            tryGrabObject(vrX, vrY, vrZ);
-            break;
-        case 'point':
-            cursorColor = '#ffff00';
-            trySelectObject(vrX, vrY, vrZ);
-            break;
-        case 'open':
-            cursorColor = '#00ffff';
-            releaseObject();
-            break;
+        if (isPinching) {
+            cursor3D.setAttribute('color', '#30d158');
+            cursor3D.setAttribute('radius', '0.03');
+        } else {
+            cursor3D.setAttribute('color', '#ffffff');
+            cursor3D.setAttribute('radius', '0.02');
+        }
     }
 
-    cursorSphere.setAttribute('color', cursorColor);
-    cursorSphere.setAttribute('scale', cursorScale);
-
-    if (grabbedObject) {
-        grabbedObject.setAttribute('position', `${vrX} ${vrY} ${vrZ}`);
-    }
-
-    checkHover(vrX, vrY, vrZ, cursorLabel);
-}
-
-function checkHover(x, y, z, cursorLabel) {
+    // Objekte checken
     const objects = document.querySelectorAll('.interactive');
-    let closestObject = null;
-    let closestDistance = Infinity;
 
-    objects.forEach((obj) => {
-        const pos = obj.getAttribute('position');
-        const distance = Math.sqrt(
-            Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2) + Math.pow(pos.z - z, 2)
-        );
+    if (isPinching && !lastPinchState) {
+        // Gerade angefangen zu pinchen - versuche zu greifen
+        objects.forEach(obj => {
+            if (grabbedObject) return;
 
-        if (distance < 1 && distance < closestDistance) {
-            closestDistance = distance;
-            closestObject = obj;
-        }
-    });
+            const pos = obj.getAttribute('position');
+            const dist = Math.sqrt(
+                Math.pow(pos.x - x3d, 2) +
+                Math.pow(pos.y - y3d, 2)
+            );
 
-    if (closestObject !== hoveredObject) {
-        if (hoveredObject) hoveredObject.emit('hover-end');
-        if (closestObject) closestObject.emit('hover-start');
-        hoveredObject = closestObject;
+            if (dist < 0.3) {
+                grabbedObject = obj;
+                obj.setAttribute('material', 'emissive', '#ffffff');
+                obj.setAttribute('material', 'emissiveIntensity', '0.3');
+
+                // Animation stoppen
+                obj.removeAttribute('animation__float');
+            }
+        });
     }
 
-    if (closestObject) {
-        cursorLabel.setAttribute('value', closestObject.id);
-        cursorLabel.setAttribute('position', `${x} ${y + 0.2} ${z}`);
-        cursorLabel.setAttribute('visible', 'true');
-    } else {
-        cursorLabel.setAttribute('visible', 'false');
+    if (!isPinching && lastPinchState && grabbedObject) {
+        // Losgelassen
+        releaseObject();
     }
-}
 
-function tryGrabObject(x, y, z) {
-    if (grabbedObject) return;
-
-    document.querySelectorAll('.interactive').forEach((obj) => {
-        const pos = obj.getAttribute('position');
-        const distance = Math.sqrt(
-            Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2) + Math.pow(pos.z - z, 2)
-        );
-
-        if (distance < 0.8) {
-            grabbedObject = obj;
-            obj.setAttribute('color', '#ffffff');
-        }
-    });
-}
-
-function trySelectObject(x, y, z) {
-    document.querySelectorAll('.interactive').forEach((obj) => {
-        const pos = obj.getAttribute('position');
-        const distance = Math.sqrt(
-            Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2) + Math.pow(pos.z - z, 2)
-        );
-
-        if (distance < 0.8) {
-            const colors = ['#ff4444', '#4444ff', '#44ff44', '#ffff44', '#ff44ff', '#44ffff'];
-            obj.setAttribute('color', colors[Math.floor(Math.random() * colors.length)]);
-        }
-    });
+    // Gegriffenes Objekt bewegen
+    if (grabbedObject && isPinching) {
+        grabbedObject.setAttribute('position', `${x3d} ${y3d} ${z3d}`);
+    }
 }
 
 function releaseObject() {
     if (grabbedObject) {
-        const colors = {
-            'red-cube': '#ff4444',
-            'blue-sphere': '#4444ff',
-            'green-cylinder': '#44ff44',
-            'yellow-torus': '#ffff44'
-        };
-        grabbedObject.setAttribute('color', colors[grabbedObject.id] || '#888888');
+        grabbedObject.setAttribute('material', 'emissive', '#000000');
+        grabbedObject.setAttribute('material', 'emissiveIntensity', '0');
+
+        // Sanft schweben lassen wo es ist
+        const pos = grabbedObject.getAttribute('position');
+        grabbedObject.setAttribute('animation__float', {
+            property: 'position',
+            to: `${pos.x} ${pos.y + 0.05} ${pos.z}`,
+            dir: 'alternate',
+            dur: 2000,
+            loop: true,
+            easing: 'easeInOutSine'
+        });
+
         grabbedObject = null;
     }
 }
 
-function hideCursor() {
-    const cursorSphere = document.getElementById('cursor-sphere');
-    const cursorLabel = document.getElementById('cursor-label');
-    if (cursorSphere) cursorSphere.setAttribute('visible', 'false');
-    if (cursorLabel) cursorLabel.setAttribute('visible', 'false');
+function updateGestureDisplay(isPinching) {
+    if (isPinching) {
+        gestureText.textContent = grabbedObject ? '✊ Objekt gegriffen' : '👌 Pinch';
+        gestureIndicator.classList.add('visible');
+    } else {
+        gestureText.textContent = '☝️ Zeigen';
+        gestureIndicator.classList.add('visible');
+    }
 }
 
-function updateHandInfo(handedness, gesture) {
-    const names = {
-        'grab': 'Greifen', 'point': 'Zeigen', 'peace': 'Peace',
-        'open': 'Offene Hand', 'fist': 'Faust', 'unknown': 'Unbekannt'
-    };
-
-    document.getElementById('gesture-display').textContent = `Geste: ${names[gesture] || gesture}`;
-    document.getElementById('hand-info').innerHTML = `
-        <small>Hand: ${handedness.label === 'Left' ? 'Links' : 'Rechts'}<br>
-        Konfidenz: ${(handedness.score * 100).toFixed(0)}%</small>
-    `;
-}
-
-function updateStatus(message) {
-    const el = document.getElementById('status');
-    if (el) el.textContent = message;
-    console.log('Status:', message);
-}
-
-// Debug: Zeige dass JS geladen wurde
-console.log('vr-hand-tracking.js geladen!');
+console.log('AR Hand Tracking loaded');
