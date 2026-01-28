@@ -28,13 +28,11 @@
 
         #camera-container {
             position: fixed;
-            bottom: 10px;
-            right: 10px;
-            width: 200px;
-            height: 150px;
-            z-index: 1000;
-            border: 3px solid #00ff00;
-            border-radius: 10px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
             overflow: hidden;
             background: #000;
         }
@@ -43,7 +41,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1);
         }
 
         #hand-canvas {
@@ -52,7 +49,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1);
+            pointer-events: none;
         }
 
         #info-panel {
@@ -149,6 +146,20 @@
             border-radius: 10px;
             font-size: 12px;
         }
+
+        /* VR-Szene über Kamerabild */
+        #vr-scene {
+            position: fixed !important;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10 !important;
+        }
+
+        .a-canvas {
+            background: transparent !important;
+        }
     </style>
 </head>
 <body>
@@ -182,23 +193,18 @@
         - Handy drehen für VR-Blick
     </div>
 
-    <!-- A-Frame VR Szene -->
+    <!-- A-Frame VR Szene (transparent für AR-Effekt) -->
     <a-scene id="vr-scene" class="hidden" embedded
-             vr-mode-ui="enabled: true"
-             device-orientation-permission-ui="enabled: true">
+             vr-mode-ui="enabled: false"
+             device-orientation-permission-ui="enabled: true"
+             background="color: transparent"
+             renderer="alpha: true; antialias: true">
 
         <!-- Assets -->
         <a-assets>
-            <img id="sky-texture" src="https://cdn.aframe.io/a-painter/images/sky.jpg">
-            <img id="floor-texture" src="https://cdn.aframe.io/a-painter/images/floor.jpg">
         </a-assets>
 
-        <!-- Himmel -->
-        <a-sky src="#sky-texture" rotation="0 -90 0"></a-sky>
-
-        <!-- Boden -->
-        <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20"
-                 color="#4a4a4a" shadow="receive: true"></a-plane>
+        <!-- Kein Himmel/Boden - Kamera ist der Hintergrund -->
 
         <!-- Interaktive Objekte -->
         <a-box id="red-cube" position="-1 1.5 -3" color="#ff4444"
