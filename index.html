@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>VR Hand Tracking</title>
+    <title>AR Hand Tracking</title>
 
-    <!-- A-Frame für VR -->
+    <!-- A-Frame für 3D -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 
     <!-- MediaPipe für Handerkennung -->
@@ -23,9 +23,11 @@
 
         body {
             overflow: hidden;
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
         }
 
+        /* Vollbild Kamera (Passthrough) */
         #camera-container {
             position: fixed;
             top: 0;
@@ -33,8 +35,6 @@
             width: 100%;
             height: 100%;
             z-index: 1;
-            overflow: hidden;
-            background: #000;
         }
 
         #camera-feed {
@@ -43,111 +43,18 @@
             object-fit: cover;
         }
 
+        /* Hand-Overlay Canvas */
         #hand-canvas {
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 5;
             pointer-events: none;
         }
 
-        #info-panel {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            padding: 15px;
-            border-radius: 10px;
-            max-width: 300px;
-        }
-
-        #info-panel h3 {
-            margin-bottom: 10px;
-            color: #00ff00;
-        }
-
-        #status {
-            color: #ffcc00;
-            margin-bottom: 10px;
-        }
-
-        #gesture-display {
-            font-size: 24px;
-            color: #00ffff;
-            margin-top: 10px;
-        }
-
-        #start-btn {
-            padding: 20px 40px;
-            font-size: 20px;
-            background: #00ff00;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            color: #000;
-            font-weight: bold;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        #start-btn:hover, #start-btn:active {
-            background: #00cc00;
-            transform: scale(1.05);
-        }
-
-        .hidden {
-            display: none !important;
-            pointer-events: none !important;
-        }
-
-        /* Startscreen über alles */
-        #start-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-
-        #start-screen.hidden {
-            display: none !important;
-        }
-
-        #start-screen h1 {
-            color: #00ff00;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        #start-screen p {
-            color: #aaa;
-            margin-bottom: 30px;
-            text-align: center;
-            padding: 0 20px;
-        }
-
-        #instructions {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            padding: 10px;
-            border-radius: 10px;
-            font-size: 12px;
-        }
-
-        /* VR-Szene über Kamerabild */
+        /* 3D Szene (transparent über Kamera) */
         #vr-scene {
             position: fixed !important;
             top: 0;
@@ -160,96 +67,224 @@
         .a-canvas {
             background: transparent !important;
         }
+
+        /* Dezentes Status-Display (Vision Pro Style) */
+        #status-bar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #888;
+        }
+
+        #status-dot.active {
+            background: #30d158;
+            box-shadow: 0 0 10px #30d158;
+        }
+
+        /* Gesten-Anzeige unten */
+        #gesture-indicator {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #gesture-indicator.visible {
+            opacity: 1;
+        }
+
+        /* Startscreen */
+        #start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #1c1c1e 0%, #000 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        #start-screen.hidden {
+            display: none !important;
+        }
+
+        #start-screen h1 {
+            color: #fff;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        #start-screen p {
+            color: #86868b;
+            font-size: 16px;
+            margin-bottom: 40px;
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.5;
+        }
+
+        #start-btn {
+            padding: 16px 32px;
+            font-size: 17px;
+            background: #0a84ff;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            color: #fff;
+            font-weight: 600;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        #start-btn:active {
+            transform: scale(0.96);
+            background: #0071e3;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Hand-Punkte Styling */
+        .hand-landmark {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+        }
+
+        /* Fingerspitzen-Cursor */
+        #finger-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 100;
+            transition: transform 0.1s, border-color 0.2s;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        #finger-cursor.pinch {
+            transform: translate(-50%, -50%) scale(0.6);
+            background: rgba(48, 209, 88, 0.8);
+            border-color: #30d158;
+        }
     </style>
 </head>
 <body>
-    <!-- Start Screen (überdeckt alles bis zum Start) -->
+    <!-- Start Screen -->
     <div id="start-screen">
-        <h1>VR Hand Tracking</h1>
-        <p>Steuere VR-Objekte mit deinen Händen</p>
-        <button id="start-btn" onclick="startApp()">Kamera & VR Starten</button>
+        <h1>AR Hand Tracking</h1>
+        <p>Halte deine Hand vor die Kamera um virtuelle Objekte zu steuern. Pinch-Geste zum Greifen.</p>
+        <button id="start-btn" onclick="startApp()">Starten</button>
     </div>
 
-    <!-- Info Panel -->
-    <div id="info-panel" class="hidden">
-        <h3>VR Hand Tracking</h3>
-        <div id="status">Initialisiere...</div>
-        <div id="gesture-display">Geste: -</div>
-        <div id="hand-info"></div>
-    </div>
-
-    <!-- Kamera Feed mit Hand-Overlay -->
+    <!-- Kamera (Passthrough) -->
     <div id="camera-container" class="hidden">
         <video id="camera-feed" playsinline></video>
-        <canvas id="hand-canvas"></canvas>
     </div>
 
-    <!-- Anleitung -->
-    <div id="instructions" class="hidden">
-        <strong>Gesten:</strong><br>
-        - Faust = Objekt greifen<br>
-        - Offene Hand = Loslassen<br>
-        - Zeigefinger = Zeigen/Auswählen<br>
-        - Handy drehen für VR-Blick
+    <!-- Hand Overlay -->
+    <canvas id="hand-canvas" class="hidden"></canvas>
+
+    <!-- Finger Cursor -->
+    <div id="finger-cursor" class="hidden"></div>
+
+    <!-- Status Bar (oben) -->
+    <div id="status-bar" class="hidden">
+        <div id="status-dot"></div>
+        <span id="status-text">Suche Hand...</span>
     </div>
 
-    <!-- A-Frame VR Szene (transparent für AR-Effekt) -->
+    <!-- Gesten Anzeige (unten) -->
+    <div id="gesture-indicator" class="hidden">
+        <span id="gesture-text"></span>
+    </div>
+
+    <!-- A-Frame 3D Szene (transparent) -->
     <a-scene id="vr-scene" class="hidden" embedded
              vr-mode-ui="enabled: false"
              device-orientation-permission-ui="enabled: true"
              background="color: transparent"
-             renderer="alpha: true; antialias: true">
+             renderer="alpha: true; antialias: true; colorManagement: true">
 
-        <!-- Assets -->
-        <a-assets>
-        </a-assets>
-
-        <!-- Kein Himmel/Boden - Kamera ist der Hintergrund -->
-
-        <!-- Interaktive Objekte -->
-        <a-box id="red-cube" position="-1 1.5 -3" color="#ff4444"
-               class="interactive" shadow="cast: true"
-               animation__hover="property: scale; to: 1.2 1.2 1.2; dur: 200; startEvents: hover-start"
-               animation__unhover="property: scale; to: 1 1 1; dur: 200; startEvents: hover-end">
+        <!-- Interaktive Objekte - schweben in der Luft -->
+        <a-box id="obj-cube" position="-0.4 0 -1.5" scale="0.15 0.15 0.15"
+               color="#ff6b6b" class="interactive"
+               animation__float="property: position; to: -0.4 0.05 -1.5; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
         </a-box>
 
-        <a-sphere id="blue-sphere" position="1 1.5 -3" radius="0.5" color="#4444ff"
-                  class="interactive" shadow="cast: true"
-                  animation__hover="property: scale; to: 1.2 1.2 1.2; dur: 200; startEvents: hover-start"
-                  animation__unhover="property: scale; to: 1 1 1; dur: 200; startEvents: hover-end">
+        <a-sphere id="obj-sphere" position="0 0 -1.5" radius="0.08"
+                  color="#4ecdc4" class="interactive"
+                  animation__float="property: position; to: 0 0.05 -1.5; dir: alternate; dur: 2500; loop: true; easing: easeInOutSine">
         </a-sphere>
 
-        <a-cylinder id="green-cylinder" position="0 1 -4" radius="0.4" height="1.5" color="#44ff44"
-                    class="interactive" shadow="cast: true"
-                    animation__hover="property: scale; to: 1.2 1.2 1.2; dur: 200; startEvents: hover-start"
-                    animation__unhover="property: scale; to: 1 1 1; dur: 200; startEvents: hover-end">
-        </a-cylinder>
+        <a-dodecahedron id="obj-dodeca" position="0.4 0 -1.5" radius="0.08"
+                        color="#ffe66d" class="interactive"
+                        animation__float="property: position; to: 0.4 0.05 -1.5; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine"
+                        animation__rotate="property: rotation; to: 0 360 0; dur: 8000; loop: true; easing: linear">
+        </a-dodecahedron>
 
-        <a-torus id="yellow-torus" position="0 2.5 -3" color="#ffff44" radius="0.4" radius-tubular="0.1"
-                 class="interactive" shadow="cast: true"
-                 animation__rotate="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear">
-        </a-torus>
-
-        <!-- Hand-Cursor (wird durch Handerkennung gesteuert) -->
-        <a-entity id="hand-cursor">
-            <a-sphere id="cursor-sphere" radius="0.05" color="#00ff00" opacity="0.8"
-                      position="0 1.5 -1"></a-sphere>
-            <a-text id="cursor-label" value="" position="0 1.7 -1" align="center"
-                    color="#ffffff" scale="0.5 0.5 0.5"></a-text>
+        <!-- 3D Cursor (folgt der Hand in 3D) -->
+        <a-entity id="hand-cursor-3d">
+            <a-sphere id="cursor-3d" radius="0.02" color="#ffffff" opacity="0.8"
+                      material="shader: flat"></a-sphere>
         </a-entity>
 
-        <!-- Lichtquellen -->
-        <a-light type="ambient" color="#404040"></a-light>
-        <a-light type="directional" position="2 4 1" intensity="0.8"
-                 cast-shadow="true" shadow-map-height="2048" shadow-map-width="2048">
-        </a-light>
+        <!-- Licht -->
+        <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
+        <a-light type="directional" position="1 2 1" intensity="0.8"></a-light>
 
-        <!-- Kamera -->
-        <a-entity id="camera-rig" position="0 1.6 0">
-            <a-camera id="main-camera" look-controls="enabled: true; magicWindowTrackingEnabled: true"
-                      wasd-controls="enabled: false">
-            </a-camera>
-        </a-entity>
+        <!-- Kamera (keine Bewegung, fixiert) -->
+        <a-camera id="main-camera" position="0 0 0"
+                  look-controls="enabled: false"
+                  wasd-controls="enabled: false">
+        </a-camera>
 
     </a-scene>
 
