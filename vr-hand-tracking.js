@@ -125,6 +125,9 @@ async function startCamera() {
 }
 
 function onHandResults(results) {
+    // Sicherheitscheck
+    if (!canvasCtx || !canvasElement) return;
+
     // Canvas leeren
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -132,8 +135,8 @@ function onHandResults(results) {
         const landmarks = results.multiHandLandmarks[0];
 
         // Hand erkannt
-        statusDot.classList.add('active');
-        statusText.textContent = 'Hand erkannt';
+        if (statusDot) statusDot.classList.add('active');
+        if (statusText) statusText.textContent = 'Hand erkannt';
 
         // Hand zeichnen (dezent)
         drawHandSkeleton(landmarks);
@@ -151,14 +154,16 @@ function onHandResults(results) {
         const screenY = indexTip.y * window.innerHeight;
 
         // Cursor bewegen
-        fingerCursor.style.left = screenX + 'px';
-        fingerCursor.style.top = screenY + 'px';
+        if (fingerCursor) {
+            fingerCursor.style.left = screenX + 'px';
+            fingerCursor.style.top = screenY + 'px';
 
-        // Pinch visuell anzeigen
-        if (isPinching) {
-            fingerCursor.classList.add('pinch');
-        } else {
-            fingerCursor.classList.remove('pinch');
+            // Pinch visuell anzeigen
+            if (isPinching) {
+                fingerCursor.classList.add('pinch');
+            } else {
+                fingerCursor.classList.remove('pinch');
+            }
         }
 
         // 3D Interaktion
@@ -171,10 +176,10 @@ function onHandResults(results) {
 
     } else {
         // Keine Hand
-        statusDot.classList.remove('active');
-        statusText.textContent = 'Suche Hand...';
-        fingerCursor.style.left = '-100px';
-        gestureIndicator.classList.remove('visible');
+        if (statusDot) statusDot.classList.remove('active');
+        if (statusText) statusText.textContent = 'Suche Hand...';
+        if (fingerCursor) fingerCursor.style.left = '-100px';
+        if (gestureIndicator) gestureIndicator.classList.remove('visible');
 
         // Objekt loslassen wenn Hand weg
         if (grabbedObject) {
