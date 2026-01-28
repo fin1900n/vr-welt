@@ -27,20 +27,23 @@
             background: #000;
         }
 
-        /* Vollbild Kamera (Passthrough) */
+        /* Vollbild Kamera (Passthrough) - MUSS SICHTBAR SEIN */
         #camera-container {
-            position: fixed;
+            position: fixed !important;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw !important;
+            height: 100vh !important;
             z-index: 1;
+            background: #000;
+            display: block !important;
         }
 
         #camera-feed {
-            width: 100%;
-            height: 100%;
+            width: 100% !important;
+            height: 100% !important;
             object-fit: cover;
+            display: block !important;
         }
 
         /* Hand-Overlay Canvas */
@@ -62,10 +65,13 @@
             width: 100%;
             height: 100%;
             z-index: 10 !important;
+            background: transparent !important;
         }
 
+        #vr-scene canvas,
         .a-canvas {
             background: transparent !important;
+            background-color: transparent !important;
         }
 
         /* Dezentes Status-Display (Vision Pro Style) */
@@ -221,7 +227,7 @@
     <div id="start-screen">
         <h1>AR Hand Tracking</h1>
         <p>Halte deine Hand vor die Kamera um virtuelle Objekte zu steuern. Pinch-Geste zum Greifen.</p>
-        <button id="start-btn" onclick="alert('Button funktioniert!'); startApp();">Starten</button>
+        <button id="start-btn" onclick="startApp();">Starten</button>
     </div>
 
     <!-- Kamera (Passthrough) -->
