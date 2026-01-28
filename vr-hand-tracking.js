@@ -87,17 +87,35 @@ async function initHandTracking() {
 }
 
 async function startCamera() {
-    // Rückkamera (Außenkamera) - Passthrough wie Vision Pro
-    const constraints = {
-        video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-        }
-    };
+    // Rückkamera (Außenkamera) ERZWINGEN - Passthrough wie Vision Pro
+    let stream;
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    try {
+        // Versuche Rückkamera zu erzwingen
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { exact: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        });
+        console.log('Rückkamera aktiv!');
+    } catch (e) {
+        console.log('Rückkamera nicht verfügbar, nutze Frontkamera:', e);
+        // Fallback auf Frontkamera
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'user',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        });
+    }
+
     videoElement.srcObject = stream;
+
+    // Video sichtbar machen
+    videoElement.style.display = 'block';
 
     await new Promise((resolve) => {
         videoElement.onloadedmetadata = () => {
