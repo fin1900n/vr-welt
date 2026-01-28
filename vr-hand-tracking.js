@@ -91,9 +91,9 @@ async function startCamera() {
 
     const constraints = {
         video: {
-            facingMode: 'user',
-            width: { ideal: 640 },
-            height: { ideal: 480 }
+            facingMode: { ideal: 'environment' },  // Rückkamera
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
         }
     };
 
@@ -118,8 +118,8 @@ async function startCamera() {
                 await hands.send({ image: videoElement });
             }
         },
-        width: 640,
-        height: 480
+        width: 1280,
+        height: 720
     });
 
     await camera.start();
@@ -224,7 +224,7 @@ function updateVRCursor(landmarks, gesture) {
     const smoothY = lerp(lastHandPosition.y, palm.y, config.handSmoothingFactor);
     lastHandPosition = { x: smoothX, y: smoothY, z: palm.z };
 
-    const vrX = (0.5 - smoothX) * 4;
+    const vrX = (smoothX - 0.5) * 4;  // Nicht gespiegelt für Rückkamera
     const vrY = (1 - smoothY) * 2.5 + 0.5;
     const vrZ = config.cursorDepth;
 
